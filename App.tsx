@@ -218,7 +218,7 @@ export default function App() {
       compact,
       frameWidth,
       headlineWidth: compact ? 320 : 920,
-      logoSize: compact ? 78 : 112,
+      logoSize: compact ? 96 : 148,
       machineRadius: compact ? 34 : 50,
       pageHorizontal: compact ? 14 : 28,
       pageVertical: compact ? 24 : 42,
@@ -300,8 +300,20 @@ export default function App() {
   return (
     <View style={styles.page}>
       <LinearGradient colors={['#ffffff', '#f4f9ff', '#dfeeff']} style={StyleSheet.absoluteFillObject} />
-      <View style={[styles.backgroundBloom, styles.backgroundBloomOne]} />
       <View style={[styles.backgroundBloom, styles.backgroundBloomTwo]} />
+      <Image
+        source={MED_LOGO}
+        resizeMode="contain"
+        style={[
+          {
+            position: 'absolute',
+            top: layout.pageVertical,
+            left: layout.pageHorizontal,
+            height: layout.logoSize,
+            width: layout.logoSize,
+          },
+        ]}
+      />
 
       <ScrollView
         bounces={false}
@@ -316,18 +328,7 @@ export default function App() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.hero, layout.compact && styles.heroCompact]}>
-          <View style={[styles.logoBadge, !layout.compact && styles.logoBadgeWide]}>
-            <Image
-              source={MED_LOGO}
-              resizeMode="contain"
-              style={{
-                height: layout.logoSize,
-                width: layout.logoSize,
-              }}
-            />
-          </View>
-
-          <View style={[styles.heroIntro, { width: layout.headlineWidth }]}>
+          <View style={[styles.heroIntro, { maxWidth: layout.headlineWidth }]}>
             <Text
               adjustsFontSizeToFit
               minimumFontScale={0.7}
@@ -463,13 +464,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     opacity: 0.55,
   },
-  backgroundBloomOne: {
-    width: 280,
-    height: 280,
-    top: 36,
-    left: -56,
-    backgroundColor: '#d3e6ff',
-  },
   backgroundBloomTwo: {
     width: 420,
     height: 420,
@@ -491,16 +485,10 @@ const styles = StyleSheet.create({
     gap: 18,
     marginBottom: 26,
   },
-  logoBadge: {
-    width: 132,
-    height: 132,
-  },
-  logoBadgeWide: {
-    marginRight: 56,
-    marginLeft: -12,
-  },
   heroIntro: {
+    width: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   badgeLabel: {
     fontFamily: 'DMSans_700Bold',
