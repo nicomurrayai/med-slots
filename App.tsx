@@ -137,7 +137,7 @@ function LeverButton({ compact, disabled, onPress, spinToken }: LeverButtonProps
             <View style={styles.leverRod} />
             <View style={styles.leverKnob}>
               <LinearGradient
-                colors={['#ff8f82', '#cf1e16', '#730000']}
+                colors={['#ff8e82', '#f04435', '#dc2215']}
                 style={styles.leverKnobCore}
               />
             </View>
@@ -217,7 +217,7 @@ export default function App() {
     return {
       compact,
       frameWidth,
-      headlineWidth: compact ? 320 : 720,
+      headlineWidth: compact ? 320 : 920,
       logoSize: compact ? 78 : 112,
       machineRadius: compact ? 34 : 50,
       pageHorizontal: compact ? 14 : 28,
@@ -316,7 +316,7 @@ export default function App() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.hero, layout.compact && styles.heroCompact]}>
-          <View style={styles.logoBadge}>
+          <View style={[styles.logoBadge, !layout.compact && styles.logoBadgeWide]}>
             <Image
               source={MED_LOGO}
               resizeMode="contain"
@@ -328,8 +328,19 @@ export default function App() {
           </View>
 
           <View style={[styles.heroIntro, { width: layout.headlineWidth }]}>
-            <Text style={[styles.badgeLabel, { fontSize: layout.subtitleSize - 4 }]}>
-              EXPERIENCIA PROMOCIONAL MED
+            <Text
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+              numberOfLines={1}
+              style={[
+                styles.heroTitle,
+                {
+                  fontSize: layout.titleSize,
+                  lineHeight: layout.compact ? 32 : 58,
+                },
+              ]}
+            >
+              GANA PREMIOS AL INSTANTE
             </Text>
             <Text
               style={[
@@ -340,18 +351,7 @@ export default function App() {
                 },
               ]}
             >
-              GANA PREMIOS AL INSTANTE{'\n'}JUEGA AHORA
-            </Text>
-            <Text
-              style={[
-                styles.heroSubtitle,
-                {
-                  fontSize: layout.subtitleSize,
-                  lineHeight: layout.compact ? 24 : 28,
-                },
-              ]}
-            >
-              Tira de la palanca y descubre si te toca uno de los equipos sorpresa.
+              JUGA AHORA
             </Text>
           </View>
         </View>
@@ -494,15 +494,10 @@ const styles = StyleSheet.create({
   logoBadge: {
     width: 132,
     height: 132,
-    borderRadius: 66,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0f4fa8',
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 10,
+  },
+  logoBadgeWide: {
+    marginRight: 56,
+    marginLeft: -12,
   },
   heroIntro: {
     alignItems: 'center',
@@ -636,19 +631,12 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#700d0d',
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
+    overflow: 'hidden',
   },
   leverKnobCore: {
-    width: 54,
-    height: 54,
+    width: '100%',
+    height: '100%',
     borderRadius: 999,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
   },
   footerCopy: {
     alignItems: 'center',
