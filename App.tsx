@@ -352,7 +352,7 @@ export default function App() {
                 },
               ]}
             >
-              JUGA AHORA
+              JUGÁ AHORA
             </Text>
           </View>
         </View>
