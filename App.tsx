@@ -41,6 +41,7 @@ const BASE_REEL_DURATION = 3200;
 const REEL_DURATION_STEP = 520;
 const REEL_SPIN_DELAY = 360;
 const CONFETTI_VISIBLE_MS = 9700;
+const ARCADE_LIGHTS = Array.from({ length: 7 }, (_, index) => index);
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -131,17 +132,38 @@ function LeverButton({ compact, disabled, onPress, spinToken }: LeverButtonProps
         ]}
       >
         <View style={styles.leverBase}>
-          <View style={styles.leverSocket} />
-          <View style={styles.leverBaseGlow} />
+          {/* Static Mount connected to machine */}
+          <LinearGradient
+            colors={['#0e3568', '#408df5', '#0e3568']}
+            end={{ x: 0, y: 1 }}
+            start={{ x: 0, y: 0 }}
+            style={styles.leverMount}
+          />
+          
+          {/* Rotating Rod and Knob */}
           <Animated.View style={[styles.leverPivot, leverPivotStyle]}>
-            <View style={styles.leverRod} />
+            <LinearGradient
+              colors={['#e0e8f0', '#b0c4de', '#e0e8f0']}
+              end={{ x: 1, y: 0 }}
+              start={{ x: 0, y: 0 }}
+              style={styles.leverRod}
+            />
             <View style={styles.leverKnob}>
               <LinearGradient
-                colors={['#ff8e82', '#f04435', '#dc2215']}
+                colors={['#ff4b3e', '#d32f2f', '#9a0007']}
                 style={styles.leverKnobCore}
               />
+              <View style={styles.leverKnobHighlight} />
             </View>
           </Animated.View>
+
+          {/* Static Silver Sphere over the rod */}
+          <LinearGradient
+            colors={['#ffffff', '#a8bbce', '#5a6f8a']}
+            end={{ x: 1, y: 1 }}
+            start={{ x: 0.1, y: 0.1 }}
+            style={styles.leverSocket}
+          />
         </View>
       </Pressable>
     </View>
@@ -282,6 +304,12 @@ export default function App() {
     status === 'spinning'
       ? 'Tus equipos ya estan girando.'
       : 'Tres iguales desbloquean un premio sorpresa.';
+  const machineDepthX = layout.compact ? 10 : 22;
+  const machineDepthY = layout.compact ? 14 : 24;
+  const sideLightSize = layout.compact ? 12 : 16;
+  const reelInset = layout.compact ? 12 : 16;
+  const reelViewportHeight = layout.reelHeight - reelInset;
+  const reelViewportWidth = layout.reelWidth - reelInset;
 
   if (!ready) {
     return (
@@ -301,19 +329,6 @@ export default function App() {
     <View style={styles.page}>
       <LinearGradient colors={['#ffffff', '#f4f9ff', '#dfeeff']} style={StyleSheet.absoluteFillObject} />
       <View style={[styles.backgroundBloom, styles.backgroundBloomTwo]} />
-      <Image
-        source={MED_LOGO}
-        resizeMode="contain"
-        style={[
-          {
-            position: 'absolute',
-            top: layout.pageVertical,
-            left: layout.pageHorizontal,
-            height: layout.logoSize,
-            width: layout.logoSize,
-          },
-        ]}
-      />
 
       <ScrollView
         bounces={false}
@@ -329,6 +344,17 @@ export default function App() {
       >
         <View style={[styles.hero, layout.compact && styles.heroCompact]}>
           <View style={[styles.heroIntro, { maxWidth: layout.headlineWidth }]}>
+            <Image
+              source={MED_LOGO}
+              resizeMode="contain"
+              style={[
+                styles.heroLogo,
+                {
+                  height: layout.logoSize,
+                  width: layout.logoSize,
+                },
+              ]}
+            />
             <Text
               adjustsFontSizeToFit
               minimumFontScale={0.7}
@@ -359,33 +385,98 @@ export default function App() {
 
         <View style={styles.machineStage}>
           <View style={styles.machineAssembly}>
-            <LinearGradient
-              colors={['#04357d', '#1154b2', '#0a3b89']}
-              end={{ x: 1, y: 1 }}
-              start={{ x: 0, y: 0 }}
+            <View
               style={[
-                styles.machineShell,
+                styles.machineCabinet,
                 {
-                  borderRadius: layout.machineRadius,
-                  width: layout.frameWidth,
+                  paddingBottom: machineDepthY,
+                  paddingRight: machineDepthX,
+                  width: layout.frameWidth + machineDepthX,
                 },
               ]}
             >
-              <LinearGradient
-                colors={['#7ad4ff', '#edf8ff', '#5f98e6']}
+              <View
                 style={[
-                  styles.machineRim,
+                  styles.machineDepthShadow,
                   {
-                    borderRadius: layout.machineRadius - 12,
+                    bottom: 4,
+                    left: machineDepthX + 12,
+                    right: 10,
+                    top: machineDepthY + 26,
+                  },
+                ]}
+              />
+              <LinearGradient
+                colors={['#072860', '#0e478f', '#051f4e']}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                style={[
+                  styles.machineDepthPlate,
+                  {
+                    borderRadius: layout.machineRadius + 8,
+                    bottom: 0,
+                    left: machineDepthX,
+                    right: 0,
+                    top: machineDepthY,
+                  },
+                ]}
+              />
+              <LinearGradient
+                colors={['#327de0', '#2563ba', '#1a4f9e']}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                style={[
+                  styles.machineShell,
+                  {
+                    borderRadius: layout.machineRadius,
+                    width: layout.frameWidth,
                   },
                 ]}
               >
                 <LinearGradient
-                  colors={['#fdfefe', '#d1dae5', '#ffffff']}
+                  colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.05)', 'transparent']}
+                  style={styles.machineGlossTop}
+                />
+
+                <View style={[styles.machineEdgeStrip, styles.machineEdgeStripLeft]}>
+                  {ARCADE_LIGHTS.map((light) => (
+                    <View
+                      key={`left-light-${light}`}
+                      style={[
+                        styles.arcadeBulb,
+                        {
+                          borderRadius: sideLightSize / 2,
+                          height: sideLightSize,
+                          width: sideLightSize,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+
+                <View style={[styles.machineEdgeStrip, styles.machineEdgeStripRight]}>
+                  {ARCADE_LIGHTS.map((light) => (
+                    <View
+                      key={`right-light-${light}`}
+                      style={[
+                        styles.arcadeBulb,
+                        {
+                          borderRadius: sideLightSize / 2,
+                          height: sideLightSize,
+                          width: sideLightSize,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+
+                <LinearGradient
+                  colors={['#1c4a91', '#255ebd', '#1c4a91']}
                   style={[
                     styles.machineCore,
                     {
-                      borderRadius: layout.machineRadius - 18,
+                      borderRadius: layout.machineRadius - 12,
+                      margin: 16,
                     },
                   ]}
                 >
@@ -394,28 +485,39 @@ export default function App() {
                       styles.reelsRow,
                       {
                         gap: layout.reelGap,
-                        paddingHorizontal: layout.compact ? 14 : 18,
-                        paddingVertical: layout.compact ? 14 : 18,
+                        paddingHorizontal: layout.compact ? 12 : 16,
+                        paddingVertical: layout.compact ? 12 : 16,
                       },
                     ]}
                   >
                     {currentReels.map((symbol, index) => (
-                      <SlotReel
+                      <View
                         key={index}
-                        duration={BASE_REEL_DURATION + index * REEL_DURATION_STEP}
-                        onSpinComplete={handleReelComplete}
-                        pendingSymbol={targetReels[index]}
-                        reelHeight={layout.reelHeight}
-                        reelWidth={layout.reelWidth}
-                        spinDelay={index * REEL_SPIN_DELAY}
-                        spinToken={spinToken}
-                        symbol={symbol}
-                      />
+                        style={[
+                          styles.reelFrame,
+                          {
+                            borderRadius: layout.reelWidth * 0.12,
+                            height: layout.reelHeight,
+                            width: layout.reelWidth,
+                          },
+                        ]}
+                      >
+                        <SlotReel
+                          duration={BASE_REEL_DURATION + index * REEL_DURATION_STEP}
+                          onSpinComplete={handleReelComplete}
+                          pendingSymbol={targetReels[index]}
+                          reelHeight={layout.reelHeight}
+                          reelWidth={layout.reelWidth}
+                          spinDelay={index * REEL_SPIN_DELAY}
+                          spinToken={spinToken}
+                          symbol={symbol}
+                        />
+                      </View>
                     ))}
                   </View>
                 </LinearGradient>
               </LinearGradient>
-            </LinearGradient>
+            </View>
 
             <LeverButton
               compact={layout.compact}
@@ -490,6 +592,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  heroLogo: {
+    marginBottom: 18,
+  },
   badgeLabel: {
     fontFamily: 'DMSans_700Bold',
     color: '#0f4fa8',
@@ -519,30 +624,97 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  machineCabinet: {
+    position: 'relative',
+  },
+  machineDepthShadow: {
+    position: 'absolute',
+    borderRadius: 48,
+    backgroundColor: 'rgba(4, 27, 67, 0.24)',
+    shadowColor: '#0a2c72',
+    shadowOpacity: 0.22,
+    shadowRadius: 34,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 12,
+  },
+  machineDepthPlate: {
+    position: 'absolute',
+    shadowColor: '#0a2c72',
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
   machineShell: {
-    paddingVertical: 22,
+    paddingVertical: 24,
     paddingHorizontal: 22,
     justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
     shadowColor: '#0a2c72',
-    shadowOpacity: 0.28,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 20 },
-    elevation: 16,
+    shadowOpacity: 0.32,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 22 },
+    elevation: 18,
+  },
+  machineGlossTop: {
+    position: 'absolute',
+    top: 0,
+    left: 28,
+    right: 28,
+    height: 76,
+    borderBottomLeftRadius: 999,
+    borderBottomRightRadius: 999,
+  },
+  machineEdgeStrip: {
+    position: 'absolute',
+    top: 42,
+    bottom: 42,
+    justifyContent: 'space-between',
+  },
+  machineEdgeStripLeft: {
+    left: 14,
+  },
+  machineEdgeStripRight: {
+    right: 14,
+  },
+  arcadeBulb: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.85)',
+    shadowColor: '#ffffff',
+    shadowOpacity: 0.75,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
   },
   machineRim: {
-    padding: 10,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.6)',
   },
   machineCore: {
-    paddingVertical: 14,
+    padding: 12,
+    overflow: 'hidden',
   },
   reelsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  reelFrame: {
+    overflow: 'hidden',
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
   leverWrap: {
     position: 'absolute',
-    right: -84,
+    right: -90,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -563,68 +735,84 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   leverBase: {
-    width: 90,
-    height: 204,
+    width: 104,
+    height: 214,
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingBottom: 12,
   },
+  leverMount: {
+    position: 'absolute',
+    top: 130,
+    left: -40,
+    width: 70,
+    height: 44,
+    borderRadius: 8,
+    borderBottomLeftRadius: 16,
+    borderTopLeftRadius: 16,
+    justifyContent: 'flex-start',
+    overflow: 'hidden',
+    shadowColor: '#0a2c72',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
   leverPivot: {
     position: 'absolute',
-    top: 70,
+    top: 62,
     width: 132,
     height: 180,
     alignItems: 'center',
   },
-  leverSocket: {
-    position: 'absolute',
-    top: 136,
-    left: -12,
-    width: 24,
-    height: 14,
-    borderRadius: 8,
-    backgroundColor: '#0f5eb7',
-    shadowColor: '#5ca4ff',
-    shadowOpacity: 0.38,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
-  },
-  leverBaseGlow: {
-    position: 'absolute',
-    bottom: 0,
-    width: 62,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: '#0f5eb7',
-    shadowColor: '#5ca4ff',
-    shadowOpacity: 0.52,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
-  },
   leverRod: {
     position: 'absolute',
-    top: -34,
-    width: 12,
-    height: 136,
+    top: -20,
+    width: 14,
+    height: 120,
     borderRadius: 999,
-    backgroundColor: '#edf5ff',
-    borderWidth: 2,
-    borderColor: '#92b5db',
+    borderWidth: 1,
+    borderColor: '#9eb5d0',
+  },
+  leverSocket: {
+    position: 'absolute',
+    top: 124,
+    left: 14,
+    width: 46,
+    height: 46,
+    borderRadius: 999,
+    shadowColor: '#16386c',
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
   },
   leverKnob: {
     position: 'absolute',
-    top: -78,
-    width: 54,
-    height: 54,
+    top: -72,
+    width: 58,
+    height: 58,
     borderRadius: 999,
     overflow: 'hidden',
+    shadowColor: '#8c130a',
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   leverKnobCore: {
     width: '100%',
     height: '100%',
     borderRadius: 999,
+  },
+  leverKnobHighlight: {
+    position: 'absolute',
+    top: 8,
+    left: 10,
+    width: 18,
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.38)',
+    transform: [{ rotate: '-18deg' }],
   },
   footerCopy: {
     alignItems: 'center',

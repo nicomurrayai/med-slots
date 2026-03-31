@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Image, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
@@ -130,7 +131,6 @@ export function SlotReel({
         },
       ]}
     >
-      <View style={styles.innerGlow} />
       <Animated.View style={animatedStyle}>
         {REEL_STRIP.map((item, index) => (
           <View
@@ -147,6 +147,12 @@ export function SlotReel({
           </View>
         ))}
       </Animated.View>
+      <LinearGradient
+        colors={['rgba(8, 28, 60, 0.35)', 'transparent', 'transparent', 'rgba(8, 28, 60, 0.35)']}
+        locations={[0, 0.18, 0.82, 1]}
+        pointerEvents="none"
+        style={StyleSheet.absoluteFillObject}
+      />
     </View>
   );
 }
@@ -154,18 +160,7 @@ export function SlotReel({
 const styles = StyleSheet.create({
   shell: {
     overflow: 'hidden',
-    backgroundColor: '#ffffff',
-    borderWidth: 4,
-    borderColor: '#1c5bb2',
-    shadowColor: '#0b3572',
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
-  },
-  innerGlow: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(13, 91, 180, 0.04)',
+    backgroundColor: 'transparent',
   },
   symbolCell: {
     alignItems: 'center',
