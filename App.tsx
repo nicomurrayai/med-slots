@@ -775,11 +775,11 @@ const styles = StyleSheet.create({
   },
   leverSocket: {
     position: 'absolute',
-    top: 124,
+    top: 130,
     left: 14,
     width: 46,
     height: 46,
-    borderRadius: 999,
+    borderRadius:600,
     shadowColor: '#16386c',
     shadowOpacity: 0.6,
     shadowRadius: 10,
