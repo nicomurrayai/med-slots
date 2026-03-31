@@ -20,9 +20,12 @@ import {
 } from 'react-native';
 import Animated, {
   Easing,
+  cancelAnimation,
   interpolate,
+  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
@@ -42,6 +45,9 @@ const REEL_DURATION_STEP = 520;
 const REEL_SPIN_DELAY = 360;
 const CONFETTI_VISIBLE_MS = 9700;
 const ARCADE_LIGHTS = Array.from({ length: 7 }, (_, index) => index);
+const ARCADE_PULSE_DURATION = 1280;
+const ARCADE_IDLE_GLOW = 0.2;
+const ARCADE_LIGHT_PHASE_STEP = 0.64;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -170,6 +176,86 @@ function LeverButton({ compact, disabled, onPress, spinToken }: LeverButtonProps
   );
 }
 
+type ArcadeBulbProps = {
+  active: boolean;
+  index: number;
+  pulse: { value: number };
+  side: 'left' | 'right';
+  size: number;
+};
+
+function ArcadeBulb({ active, index, pulse, side, size }: ArcadeBulbProps) {
+  const phase =
+    (side === 'left' ? index : ARCADE_LIGHTS.length - 1 - index) * ARCADE_LIGHT_PHASE_STEP +
+    (side === 'right' ? Math.PI / 2.8 : 0);
+
+  const bulbStyle = useAnimatedStyle(() => {
+    const wave = 0.5 + 0.5 * Math.sin((pulse.value * Math.PI * 2) + phase);
+    const intensity = active ? 0.24 + wave * 0.56 : 0.16 + pulse.value * 0.28;
+
+    return {
+      opacity: 0.44 + intensity * 0.38,
+      transform: [{ scale: 0.96 + intensity * 0.1 }],
+      backgroundColor: interpolateColor(
+        intensity,
+        [0, 0.55, 1],
+        ['#7891b8', '#e4efff', '#ffefb8'],
+      ),
+      borderColor: interpolateColor(
+        intensity,
+        [0, 1],
+        ['rgba(255,255,255,0.4)', 'rgba(255,245,197,0.88)'],
+      ),
+    };
+  }, [active, phase]);
+
+  const haloStyle = useAnimatedStyle(() => {
+    const wave = 0.5 + 0.5 * Math.sin((pulse.value * Math.PI * 2) + phase);
+    const intensity = active ? 0.24 + wave * 0.56 : 0.16 + pulse.value * 0.28;
+
+    return {
+      opacity: intensity * 0.28,
+      transform: [{ scale: 1 + intensity * 0.5 }],
+    };
+  }, [active, phase]);
+
+  return (
+    <View
+      style={[
+        styles.arcadeBulbSlot,
+        {
+          height: size + 12,
+          width: size + 12,
+        },
+      ]}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.arcadeBulbHalo,
+          {
+            borderRadius: (size + 8) / 2,
+            height: size + 8,
+            width: size + 8,
+          },
+          haloStyle,
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.arcadeBulb,
+          {
+            borderRadius: size / 2,
+            height: size,
+            width: size,
+          },
+          bulbStyle,
+        ]}
+      />
+    </View>
+  );
+}
+
 export default function App() {
   const { width, height } = useWindowDimensions();
   const [assetsReady, setAssetsReady] = useState(false);
@@ -187,6 +273,7 @@ export default function App() {
 
   const pendingResultRef = useRef<SpinResult | null>(null);
   const completedReelsRef = useRef(0);
+  const arcadePulse = useSharedValue(ARCADE_IDLE_GLOW);
 
   const [leagueLoaded, leagueError] = useLeagueSpartan({
     LeagueSpartan_600SemiBold,
@@ -224,6 +311,29 @@ export default function App() {
 
     return () => clearTimeout(timeout);
   }, [hasTriggeredConfetti]);
+
+  useEffect(() => {
+    cancelAnimation(arcadePulse);
+
+    if (status === 'spinning') {
+      arcadePulse.value = 0;
+      arcadePulse.value = withRepeat(
+        withTiming(1, {
+          duration: ARCADE_PULSE_DURATION,
+          easing: Easing.linear,
+        }),
+        -1,
+        false,
+      );
+
+      return () => cancelAnimation(arcadePulse);
+    }
+
+    arcadePulse.value = withTiming(ARCADE_IDLE_GLOW, {
+      duration: 240,
+      easing: Easing.out(Easing.quad),
+    });
+  }, [arcadePulse, status]);
 
   const ready = assetsReady && (leagueLoaded || !!leagueError) && (dmLoaded || !!dmError);
 
@@ -306,7 +416,7 @@ export default function App() {
       : 'Tres iguales desbloquean un premio sorpresa.';
   const machineDepthX = layout.compact ? 10 : 22;
   const machineDepthY = layout.compact ? 14 : 24;
-  const sideLightSize = layout.compact ? 12 : 16;
+  const sideLightSize = layout.compact ? 10 : 14;
   const reelInset = layout.compact ? 12 : 16;
   const reelViewportHeight = layout.reelHeight - reelInset;
   const reelViewportWidth = layout.reelWidth - reelInset;
@@ -440,32 +550,26 @@ export default function App() {
 
                 <View style={[styles.machineEdgeStrip, styles.machineEdgeStripLeft]}>
                   {ARCADE_LIGHTS.map((light) => (
-                    <View
+                    <ArcadeBulb
+                      active={status === 'spinning'}
+                      index={light}
                       key={`left-light-${light}`}
-                      style={[
-                        styles.arcadeBulb,
-                        {
-                          borderRadius: sideLightSize / 2,
-                          height: sideLightSize,
-                          width: sideLightSize,
-                        },
-                      ]}
+                      pulse={arcadePulse}
+                      side="left"
+                      size={sideLightSize}
                     />
                   ))}
                 </View>
 
                 <View style={[styles.machineEdgeStrip, styles.machineEdgeStripRight]}>
                   {ARCADE_LIGHTS.map((light) => (
-                    <View
+                    <ArcadeBulb
+                      active={status === 'spinning'}
+                      index={light}
                       key={`right-light-${light}`}
-                      style={[
-                        styles.arcadeBulb,
-                        {
-                          borderRadius: sideLightSize / 2,
-                          height: sideLightSize,
-                          width: sideLightSize,
-                        },
-                      ]}
+                      pulse={arcadePulse}
+                      side="right"
+                      size={sideLightSize}
                     />
                   ))}
                 </View>
@@ -674,20 +778,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   machineEdgeStripLeft: {
-    left: 14,
+    left: 8,
   },
   machineEdgeStripRight: {
-    right: 14,
+    right: 8,
+  },
+  arcadeBulbSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  arcadeBulbHalo: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255, 239, 170, 0.68)',
   },
   arcadeBulb: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#e7f1ff',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.85)',
-    shadowColor: '#ffffff',
-    shadowOpacity: 0.75,
-    shadowRadius: 8,
+    borderColor: 'rgba(255,255,255,0.72)',
+    shadowColor: '#fff2bd',
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
+    elevation: 8,
   },
   machineRim: {
     padding: 16,
