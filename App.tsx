@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
   },
   leverWrap: {
     position: 'absolute',
-    right: -90,
+    right: -130,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -746,7 +746,7 @@ const styles = StyleSheet.create({
     top: 130,
     left: -40,
     width: 70,
-    height: 44,
+    height: 48,
     borderRadius: 8,
     borderBottomLeftRadius: 16,
     borderTopLeftRadius: 16,
