@@ -341,10 +341,19 @@ export default function App() {
     const pageWidth = Math.min(width, 1280);
     const compact = pageWidth < 900;
     const frameWidth = clamp(compact ? pageWidth - 28 : pageWidth - 160, 300, compact ? 420 : 860);
-    const innerPadding = compact ? 18 : 28;
+    const machineShellHorizontalPadding = compact ? 14 : 22;
+    const machineShellVerticalPadding = compact ? 20 : 24;
+    const machineCoreMargin = compact ? 10 : 16;
+    const machineCorePadding = compact ? 8 : 12;
+    const innerPadding = compact ? 8 : 24;
     const reelGap = compact ? 10 : 18;
-    const reelWidth = (frameWidth - innerPadding * 2 - reelGap * 2) / 3;
-    const reelHeight = clamp(compact ? reelWidth * 1.52 : reelWidth * 1.28, 128, 236);
+    const reelLaneWidth =
+      frameWidth -
+      machineShellHorizontalPadding * 2 -
+      machineCoreMargin * 2 -
+      machineCorePadding * 2;
+    const reelWidth = (reelLaneWidth - innerPadding * 2 - reelGap * 2) / 3;
+    const reelHeight = clamp(compact ? reelWidth * 1.86 : reelWidth * 1.36, 132, compact ? 210 : 276);
 
     return {
       compact,
@@ -352,8 +361,13 @@ export default function App() {
       headlineWidth: compact ? 320 : 920,
       logoSize: compact ? 96 : 148,
       machineRadius: compact ? 34 : 50,
+      machineCoreMargin,
+      machineCorePadding,
+      machineShellHorizontalPadding,
+      machineShellVerticalPadding,
       pageHorizontal: compact ? 14 : 28,
       pageVertical: compact ? 24 : 42,
+      reelsHorizontalPadding: innerPadding,
       reelGap,
       reelHeight,
       reelWidth,
@@ -417,9 +431,6 @@ export default function App() {
   const machineDepthX = layout.compact ? 10 : 22;
   const machineDepthY = layout.compact ? 14 : 24;
   const sideLightSize = layout.compact ? 10 : 14;
-  const reelInset = layout.compact ? 12 : 16;
-  const reelViewportHeight = layout.reelHeight - reelInset;
-  const reelViewportWidth = layout.reelWidth - reelInset;
 
   if (!ready) {
     return (
@@ -539,6 +550,8 @@ export default function App() {
                   styles.machineShell,
                   {
                     borderRadius: layout.machineRadius,
+                    paddingHorizontal: layout.machineShellHorizontalPadding,
+                    paddingVertical: layout.machineShellVerticalPadding,
                     width: layout.frameWidth,
                   },
                 ]}
@@ -580,7 +593,8 @@ export default function App() {
                     styles.machineCore,
                     {
                       borderRadius: layout.machineRadius - 12,
-                      margin: 16,
+                      margin: layout.machineCoreMargin,
+                      padding: layout.machineCorePadding,
                     },
                   ]}
                 >
@@ -589,7 +603,7 @@ export default function App() {
                       styles.reelsRow,
                       {
                         gap: layout.reelGap,
-                        paddingHorizontal: layout.compact ? 12 : 16,
+                        paddingHorizontal: layout.reelsHorizontalPadding,
                         paddingVertical: layout.compact ? 12 : 16,
                       },
                     ]}
