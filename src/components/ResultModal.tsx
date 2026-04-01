@@ -31,7 +31,7 @@ export function ResultModal({ isOpen, message, onClose, title, variant }: Result
             onPress={onClose}
             style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
           >
-            <Text style={styles.buttonText}>Cerrar</Text>
+            <Text style={styles.buttonText}>Volver al inicio</Text>
           </Pressable>
         </View>
       </Animated.View>

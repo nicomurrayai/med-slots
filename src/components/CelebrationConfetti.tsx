@@ -9,6 +9,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { BRAND_CONFETTI_COLORS } from '../theme/brand';
+
 type CelebrationConfettiProps = {
   active: boolean;
   burstKey: number;
@@ -93,7 +95,6 @@ export const CelebrationConfetti = memo(function CelebrationConfetti({
   const { height, width } = useWindowDimensions();
 
   const pieces = useMemo(() => {
-    const palette = ['#ff784b', '#ffd25b', '#18b8ff', '#0f53aa', '#7de2ff', '#ff4f9a', '#22d1a8'];
     const waveCount = 3;
     const piecesPerWave = 34;
 
@@ -106,7 +107,7 @@ export const CelebrationConfetti = memo(function CelebrationConfetti({
       const direction = localIndex % 2 === 0 ? 1 : -1;
 
       return {
-        color: palette[index % palette.length],
+        color: BRAND_CONFETTI_COLORS[index % BRAND_CONFETTI_COLORS.length],
         delay: wave * 220 + (localIndex % 6) * 38,
         duration: 2800 + wave * 340 + (localIndex % 8) * 48,
         id: `${burstKey}-${index}`,

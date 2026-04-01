@@ -31,9 +31,12 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { CelebrationConfetti } from './src/components/CelebrationConfetti';
+import { EmailCaptureScreen } from './src/components/EmailCaptureScreen';
+import { IntroHomeScreen } from './src/components/IntroHomeScreen';
 import { ResultModal } from './src/components/ResultModal';
 import { SlotReel } from './src/components/SlotReel';
 import { MED_LOGO, SLOT_SYMBOLS } from './src/data/slotSymbols';
+import { BRAND_COLORS, BRAND_GRADIENTS } from './src/theme/brand';
 import { GameStatus, ResultModalState, SlotSymbol, SpinResult } from './src/types/slot';
 
 const WIN_MESSAGE = 'Felicitaciones! Ganaste un premio sorpresa.';
@@ -48,6 +51,17 @@ const ARCADE_LIGHTS = Array.from({ length: 7 }, (_, index) => index);
 const ARCADE_PULSE_DURATION = 1280;
 const ARCADE_IDLE_GLOW = 0.2;
 const ARCADE_LIGHT_PHASE_STEP = 0.64;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type AppStep = 'home' | 'leadCapture' | 'slot';
+
+function createDefaultResultModal(): ResultModalState {
+  return {
+    isOpen: false,
+    variant: 'lose',
+    message: '',
+  };
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -79,6 +93,10 @@ function createSpinResult(): SpinResult {
     reels,
     isWin: false,
   };
+}
+
+function isValidEmail(value: string) {
+  return EMAIL_REGEX.test(value.trim());
 }
 
 type LeverButtonProps = {
@@ -138,34 +156,28 @@ function LeverButton({ compact, disabled, onPress, spinToken }: LeverButtonProps
         ]}
       >
         <View style={styles.leverBase}>
-          {/* Static Mount connected to machine */}
           <LinearGradient
-            colors={['#0e3568', '#408df5', '#0e3568']}
+            colors={BRAND_GRADIENTS.leverMount}
             end={{ x: 0, y: 1 }}
             start={{ x: 0, y: 0 }}
             style={styles.leverMount}
           />
-          
-          {/* Rotating Rod and Knob */}
+
           <Animated.View style={[styles.leverPivot, leverPivotStyle]}>
             <LinearGradient
-              colors={['#e0e8f0', '#b0c4de', '#e0e8f0']}
+              colors={BRAND_GRADIENTS.metallic}
               end={{ x: 1, y: 0 }}
               start={{ x: 0, y: 0 }}
               style={styles.leverRod}
             />
             <View style={styles.leverKnob}>
-              <LinearGradient
-                colors={['#ff4b3e', '#d32f2f', '#9a0007']}
-                style={styles.leverKnobCore}
-              />
+              <LinearGradient colors={BRAND_GRADIENTS.leverKnob} style={styles.leverKnobCore} />
               <View style={styles.leverKnobHighlight} />
             </View>
           </Animated.View>
 
-          {/* Static Silver Sphere over the rod */}
           <LinearGradient
-            colors={['#ffffff', '#a8bbce', '#5a6f8a']}
+            colors={BRAND_GRADIENTS.socket}
             end={{ x: 1, y: 1 }}
             start={{ x: 0.1, y: 0.1 }}
             style={styles.leverSocket}
@@ -199,12 +211,12 @@ function ArcadeBulb({ active, index, pulse, side, size }: ArcadeBulbProps) {
       backgroundColor: interpolateColor(
         intensity,
         [0, 0.55, 1],
-        ['#7891b8', '#e4efff', '#ffefb8'],
+        ['#7891b8', '#e4efff', '#d7ebff'],
       ),
       borderColor: interpolateColor(
         intensity,
         [0, 1],
-        ['rgba(255,255,255,0.4)', 'rgba(255,245,197,0.88)'],
+        ['rgba(255,255,255,0.4)', 'rgba(235,245,255,0.92)'],
       ),
     };
   }, [active, phase]);
@@ -259,17 +271,16 @@ function ArcadeBulb({ active, index, pulse, side, size }: ArcadeBulbProps) {
 export default function App() {
   const { width, height } = useWindowDimensions();
   const [assetsReady, setAssetsReady] = useState(false);
+  const [currentStep, setCurrentStep] = useState<AppStep>('home');
+  const [capturedEmail, setCapturedEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [currentReels, setCurrentReels] = useState<SlotSymbol[]>(INITIAL_REELS);
   const [targetReels, setTargetReels] = useState<SlotSymbol[]>(INITIAL_REELS);
   const [spinToken, setSpinToken] = useState(0);
   const [status, setStatus] = useState<GameStatus>('idle');
   const [hasTriggeredConfetti, setHasTriggeredConfetti] = useState(false);
   const [confettiBurstKey, setConfettiBurstKey] = useState(0);
-  const [resultModal, setResultModal] = useState<ResultModalState>({
-    isOpen: false,
-    variant: 'lose',
-    message: '',
-  });
+  const [resultModal, setResultModal] = useState<ResultModalState>(createDefaultResultModal);
 
   const pendingResultRef = useRef<SpinResult | null>(null);
   const completedReelsRef = useRef(0);
@@ -357,24 +368,68 @@ export default function App() {
 
     return {
       compact,
+      emailPanelWidth: clamp(compact ? pageWidth - 18 : pageWidth - 150, 320, compact ? 470 : 1040),
       frameWidth,
       headlineWidth: compact ? 320 : 920,
+      homePanelWidth: clamp(compact ? pageWidth - 18 : pageWidth - 160, 320, compact ? 470 : 980),
       logoSize: compact ? 96 : 148,
-      machineRadius: compact ? 34 : 50,
       machineCoreMargin,
       machineCorePadding,
+      machineRadius: compact ? 34 : 50,
       machineShellHorizontalPadding,
       machineShellVerticalPadding,
       pageHorizontal: compact ? 14 : 28,
       pageVertical: compact ? 24 : 42,
-      reelsHorizontalPadding: innerPadding,
       reelGap,
       reelHeight,
       reelWidth,
+      reelsHorizontalPadding: innerPadding,
       subtitleSize: compact ? 16 : 20,
       titleSize: compact ? 28 : 54,
     };
   }, [width]);
+
+  const resetSlotState = () => {
+    pendingResultRef.current = null;
+    completedReelsRef.current = 0;
+    setCurrentReels(INITIAL_REELS);
+    setTargetReels(INITIAL_REELS);
+    setStatus('idle');
+    setHasTriggeredConfetti(false);
+    setResultModal(createDefaultResultModal());
+  };
+
+  const handleOpenLeadCapture = () => {
+    setEmailError('');
+    setCurrentStep('leadCapture');
+  };
+
+  const handleEmailChange = (value: string) => {
+    setCapturedEmail(value);
+
+    if (emailError) {
+      setEmailError('');
+    }
+  };
+
+  const handleEmailSubmit = () => {
+    const normalizedEmail = capturedEmail.trim();
+
+    if (!isValidEmail(normalizedEmail)) {
+      setEmailError('Ingresa un correo valido para activar la maquina.');
+      return;
+    }
+
+    setCapturedEmail(normalizedEmail);
+    setEmailError('');
+    resetSlotState();
+    setCurrentStep('slot');
+  };
+
+  const handleGoBackHome = () => {
+    setEmailError('');
+    setCurrentStep('home');
+  };
 
   const handleSpin = () => {
     if (status === 'spinning') {
@@ -421,7 +476,8 @@ export default function App() {
   };
 
   const closeModal = () => {
-    setResultModal((prev) => ({ ...prev, isOpen: false }));
+    resetSlotState();
+    setCurrentStep('home');
   };
 
   const statusCopy =
@@ -434,10 +490,10 @@ export default function App() {
 
   if (!ready) {
     return (
-      <LinearGradient colors={['#f8fbff', '#d7ecff', '#eef6ff']} style={styles.loadingScreen}>
+      <LinearGradient colors={BRAND_GRADIENTS.page} style={styles.loadingScreen}>
         <View style={styles.loadingCard}>
           <Image source={MED_LOGO} resizeMode="contain" style={styles.loadingLogo} />
-          <ActivityIndicator color="#1253ab" size="large" />
+          <ActivityIndicator color={BRAND_COLORS.primary} size="large" />
           <Text style={styles.loadingTitle}>Preparando la maquina MED...</Text>
           <Text style={styles.loadingBody}>Cargando branding, premios y animaciones.</Text>
         </View>
@@ -448,8 +504,10 @@ export default function App() {
 
   return (
     <View style={styles.page}>
-      <LinearGradient colors={['#ffffff', '#f4f9ff', '#dfeeff']} style={StyleSheet.absoluteFillObject} />
-      <View style={[styles.backgroundBloom, styles.backgroundBloomTwo]} />
+      <LinearGradient colors={BRAND_GRADIENTS.page} style={StyleSheet.absoluteFillObject} />
+      <View style={[styles.backgroundBloom, styles.backgroundBloomPrimary]} />
+      <View style={[styles.backgroundBloom, styles.backgroundBloomSecondary]} />
+      <View style={[styles.backgroundBloom, styles.backgroundBloomTertiary]} />
 
       <ScrollView
         bounces={false}
@@ -463,195 +521,225 @@ export default function App() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.hero, layout.compact && styles.heroCompact]}>
-          <View style={[styles.heroIntro, { maxWidth: layout.headlineWidth }]}>
-            <Image
-              source={MED_LOGO}
-              resizeMode="contain"
-              style={[
-                styles.heroLogo,
-                {
-                  height: layout.logoSize,
-                  width: layout.logoSize,
-                },
-              ]}
-            />
-            <Text
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-              numberOfLines={1}
-              style={[
-                styles.heroTitle,
-                {
-                  fontSize: layout.titleSize,
-                  lineHeight: layout.compact ? 32 : 58,
-                },
-              ]}
-            >
-              GANA PREMIOS AL INSTANTE
-            </Text>
-            <Text
-              style={[
-                styles.heroTitle,
-                {
-                  fontSize: layout.titleSize,
-                  lineHeight: layout.compact ? 32 : 58,
-                },
-              ]}
-            >
-              JUGÁ AHORA
-            </Text>
-          </View>
-        </View>
+        {currentStep === 'home' ? (
+          <IntroHomeScreen
+            compact={layout.compact}
+            logoSize={layout.logoSize}
+            onContinue={handleOpenLeadCapture}
+            panelWidth={layout.homePanelWidth}
+            titleSize={layout.titleSize}
+          />
+        ) : null}
 
-        <View style={styles.machineStage}>
-          <View style={styles.machineAssembly}>
-            <View
-              style={[
-                styles.machineCabinet,
-                {
-                  paddingBottom: machineDepthY,
-                  paddingRight: machineDepthX,
-                  width: layout.frameWidth + machineDepthX,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.machineDepthShadow,
-                  {
-                    bottom: 4,
-                    left: machineDepthX + 12,
-                    right: 10,
-                    top: machineDepthY + 26,
-                  },
-                ]}
-              />
-              <LinearGradient
-                colors={['#072860', '#0e478f', '#051f4e']}
-                end={{ x: 1, y: 1 }}
-                start={{ x: 0, y: 0 }}
-                style={[
-                  styles.machineDepthPlate,
-                  {
-                    borderRadius: layout.machineRadius + 8,
-                    bottom: 0,
-                    left: machineDepthX,
-                    right: 0,
-                    top: machineDepthY,
-                  },
-                ]}
-              />
-              <LinearGradient
-                colors={['#327de0', '#2563ba', '#1a4f9e']}
-                end={{ x: 1, y: 1 }}
-                start={{ x: 0, y: 0 }}
-                style={[
-                  styles.machineShell,
-                  {
-                    borderRadius: layout.machineRadius,
-                    paddingHorizontal: layout.machineShellHorizontalPadding,
-                    paddingVertical: layout.machineShellVerticalPadding,
-                    width: layout.frameWidth,
-                  },
-                ]}
-              >
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.05)', 'transparent']}
-                  style={styles.machineGlossTop}
+        {currentStep === 'leadCapture' ? (
+          <EmailCaptureScreen
+            compact={layout.compact}
+            email={capturedEmail}
+            errorMessage={emailError}
+            onBack={handleGoBackHome}
+            onChangeEmail={handleEmailChange}
+            onSubmit={handleEmailSubmit}
+            panelWidth={layout.emailPanelWidth}
+          />
+        ) : null}
+
+        {currentStep === 'slot' ? (
+          <>
+            <View style={[styles.hero, layout.compact && styles.heroCompact]}>
+              <View style={[styles.heroIntro, { maxWidth: layout.headlineWidth }]}>
+                <Image
+                  source={MED_LOGO}
+                  resizeMode="contain"
+                  style={[
+                    styles.heroLogo,
+                    {
+                      height: layout.logoSize,
+                      width: layout.logoSize,
+                    },
+                  ]}
                 />
 
-                <View style={[styles.machineEdgeStrip, styles.machineEdgeStripLeft]}>
-                  {ARCADE_LIGHTS.map((light) => (
-                    <ArcadeBulb
-                      active={status === 'spinning'}
-                      index={light}
-                      key={`left-light-${light}`}
-                      pulse={arcadePulse}
-                      side="left"
-                      size={sideLightSize}
-                    />
-                  ))}
-                </View>
-
-                <View style={[styles.machineEdgeStrip, styles.machineEdgeStripRight]}>
-                  {ARCADE_LIGHTS.map((light) => (
-                    <ArcadeBulb
-                      active={status === 'spinning'}
-                      index={light}
-                      key={`right-light-${light}`}
-                      pulse={arcadePulse}
-                      side="right"
-                      size={sideLightSize}
-                    />
-                  ))}
-                </View>
-
-                <LinearGradient
-                  colors={['#1c4a91', '#255ebd', '#1c4a91']}
+                <Text
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  numberOfLines={1}
                   style={[
-                    styles.machineCore,
+                    styles.heroTitle,
                     {
-                      borderRadius: layout.machineRadius - 12,
-                      margin: layout.machineCoreMargin,
-                      padding: layout.machineCorePadding,
+                      fontSize: layout.titleSize,
+                      lineHeight: layout.compact ? 32 : 58,
+                    },
+                  ]}
+                >
+                  GANA PREMIOS AL INSTANTE
+                </Text>
+
+                <Text
+                  style={[
+                    styles.heroTitle,
+                    {
+                      fontSize: layout.titleSize,
+                      lineHeight: layout.compact ? 32 : 58,
+                    },
+                  ]}
+                >
+                  JUGA AHORA
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.machineStage}>
+              <View style={styles.machineAssembly}>
+                <View
+                  style={[
+                    styles.machineCabinet,
+                    {
+                      paddingBottom: machineDepthY,
+                      paddingRight: machineDepthX,
+                      width: layout.frameWidth + machineDepthX,
                     },
                   ]}
                 >
                   <View
                     style={[
-                      styles.reelsRow,
+                      styles.machineDepthShadow,
                       {
-                        gap: layout.reelGap,
-                        paddingHorizontal: layout.reelsHorizontalPadding,
-                        paddingVertical: layout.compact ? 12 : 16,
+                        bottom: 4,
+                        left: machineDepthX + 12,
+                        right: 10,
+                        top: machineDepthY + 26,
+                      },
+                    ]}
+                  />
+
+                  <LinearGradient
+                    colors={BRAND_GRADIENTS.machineDepth}
+                    end={{ x: 1, y: 1 }}
+                    start={{ x: 0, y: 0 }}
+                    style={[
+                      styles.machineDepthPlate,
+                      {
+                        borderRadius: layout.machineRadius + 8,
+                        bottom: 0,
+                        left: machineDepthX,
+                        right: 0,
+                        top: machineDepthY,
+                      },
+                    ]}
+                  />
+
+                  <LinearGradient
+                    colors={BRAND_GRADIENTS.machineShell}
+                    end={{ x: 1, y: 1 }}
+                    start={{ x: 0, y: 0 }}
+                    style={[
+                      styles.machineShell,
+                      {
+                        borderRadius: layout.machineRadius,
+                        paddingHorizontal: layout.machineShellHorizontalPadding,
+                        paddingVertical: layout.machineShellVerticalPadding,
+                        width: layout.frameWidth,
                       },
                     ]}
                   >
-                    {currentReels.map((symbol, index) => (
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.05)', 'transparent']}
+                      style={styles.machineGlossTop}
+                    />
+
+                    <View style={[styles.machineEdgeStrip, styles.machineEdgeStripLeft]}>
+                      {ARCADE_LIGHTS.map((light) => (
+                        <ArcadeBulb
+                          active={status === 'spinning'}
+                          index={light}
+                          key={`left-light-${light}`}
+                          pulse={arcadePulse}
+                          side="left"
+                          size={sideLightSize}
+                        />
+                      ))}
+                    </View>
+
+                    <View style={[styles.machineEdgeStrip, styles.machineEdgeStripRight]}>
+                      {ARCADE_LIGHTS.map((light) => (
+                        <ArcadeBulb
+                          active={status === 'spinning'}
+                          index={light}
+                          key={`right-light-${light}`}
+                          pulse={arcadePulse}
+                          side="right"
+                          size={sideLightSize}
+                        />
+                      ))}
+                    </View>
+
+                    <LinearGradient
+                      colors={BRAND_GRADIENTS.machineCore}
+                      style={[
+                        styles.machineCore,
+                        {
+                          borderRadius: layout.machineRadius - 12,
+                          margin: layout.machineCoreMargin,
+                          padding: layout.machineCorePadding,
+                        },
+                      ]}
+                    >
                       <View
-                        key={index}
                         style={[
-                          styles.reelFrame,
+                          styles.reelsRow,
                           {
-                            borderRadius: layout.reelWidth * 0.12,
-                            height: layout.reelHeight,
-                            width: layout.reelWidth,
+                            gap: layout.reelGap,
+                            paddingHorizontal: layout.reelsHorizontalPadding,
+                            paddingVertical: layout.compact ? 12 : 16,
                           },
                         ]}
                       >
-                        <SlotReel
-                          duration={BASE_REEL_DURATION + index * REEL_DURATION_STEP}
-                          onSpinComplete={handleReelComplete}
-                          pendingSymbol={targetReels[index]}
-                          reelHeight={layout.reelHeight}
-                          reelWidth={layout.reelWidth}
-                          spinDelay={index * REEL_SPIN_DELAY}
-                          spinToken={spinToken}
-                          symbol={symbol}
-                        />
+                        {currentReels.map((symbol, index) => (
+                          <View
+                            key={index}
+                            style={[
+                              styles.reelFrame,
+                              {
+                                borderRadius: layout.reelWidth * 0.12,
+                                height: layout.reelHeight,
+                                width: layout.reelWidth,
+                              },
+                            ]}
+                          >
+                            <SlotReel
+                              duration={BASE_REEL_DURATION + index * REEL_DURATION_STEP}
+                              onSpinComplete={handleReelComplete}
+                              pendingSymbol={targetReels[index]}
+                              reelHeight={layout.reelHeight}
+                              reelWidth={layout.reelWidth}
+                              spinDelay={index * REEL_SPIN_DELAY}
+                              spinToken={spinToken}
+                              symbol={symbol}
+                            />
+                          </View>
+                        ))}
                       </View>
-                    ))}
-                  </View>
-                </LinearGradient>
-              </LinearGradient>
+                    </LinearGradient>
+                  </LinearGradient>
+                </View>
+
+                <LeverButton
+                  compact={layout.compact}
+                  disabled={status === 'spinning'}
+                  onPress={handleSpin}
+                  spinToken={spinToken}
+                />
+              </View>
             </View>
 
-            <LeverButton
-              compact={layout.compact}
-              disabled={status === 'spinning'}
-              onPress={handleSpin}
-              spinToken={spinToken}
-            />
-          </View>
-        </View>
-
-        <View style={styles.footerCopy}>
-          <Text style={[styles.spinInstruction, { fontSize: layout.compact ? 30 : 38 }]}>
-            TIRA DE LA PALANCA
-          </Text>
-          <Text style={styles.statusCopy}>{statusCopy}</Text>
-        </View>
+            <View style={styles.footerCopy}>
+              <Text style={[styles.spinInstruction, { fontSize: layout.compact ? 30 : 38 }]}>
+                TIRA DE LA PALANCA
+              </Text>
+              <Text style={styles.statusCopy}>{statusCopy}</Text>
+            </View>
+          </>
+        ) : null}
       </ScrollView>
 
       <CelebrationConfetti active={hasTriggeredConfetti} burstKey={confettiBurstKey} />
@@ -672,24 +760,40 @@ export default function App() {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: '#f8fbff',
+    backgroundColor: BRAND_COLORS.pageTop,
   },
   scrollContent: {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    width: '100%',
   },
   backgroundBloom: {
     position: 'absolute',
     borderRadius: 999,
-    opacity: 0.55,
+    opacity: 0.7,
   },
-  backgroundBloomTwo: {
-    width: 420,
-    height: 420,
-    bottom: -120,
-    right: -140,
-    backgroundColor: '#cce0ff',
+  backgroundBloomPrimary: {
+    width: 460,
+    height: 460,
+    top: -140,
+    right: -120,
+    backgroundColor: BRAND_COLORS.bloomPrimary,
+  },
+  backgroundBloomSecondary: {
+    width: 380,
+    height: 380,
+    bottom: -100,
+    left: -90,
+    backgroundColor: BRAND_COLORS.bloomSecondary,
+  },
+  backgroundBloomTertiary: {
+    width: 300,
+    height: 300,
+    top: '34%',
+    left: '38%',
+    backgroundColor: BRAND_COLORS.bloomTertiary,
+    opacity: 0.32,
   },
   hero: {
     width: '100%',
@@ -715,22 +819,22 @@ const styles = StyleSheet.create({
   },
   badgeLabel: {
     fontFamily: 'DMSans_700Bold',
-    color: '#0f4fa8',
+    color: BRAND_COLORS.primary,
     letterSpacing: 2.6,
     marginBottom: 12,
     textAlign: 'center',
   },
   heroTitle: {
     fontFamily: 'LeagueSpartan_700Bold',
-    color: '#0f4fa8',
+    color: BRAND_COLORS.primary,
     letterSpacing: 1.2,
     textAlign: 'center',
   },
   heroSubtitle: {
     fontFamily: 'DMSans_500Medium',
-    color: '#335379',
+    color: BRAND_COLORS.textSecondary,
     marginTop: 12,
-    maxWidth: 560,
+    maxWidth: 680,
     textAlign: 'center',
   },
   machineStage: {
@@ -749,7 +853,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderRadius: 48,
     backgroundColor: 'rgba(4, 27, 67, 0.24)',
-    shadowColor: '#0a2c72',
+    shadowColor: BRAND_COLORS.shadowStrong,
     shadowOpacity: 0.22,
     shadowRadius: 34,
     shadowOffset: { width: 0, height: 18 },
@@ -757,7 +861,7 @@ const styles = StyleSheet.create({
   },
   machineDepthPlate: {
     position: 'absolute',
-    shadowColor: '#0a2c72',
+    shadowColor: BRAND_COLORS.shadowStrong,
     shadowOpacity: 0.22,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
@@ -770,7 +874,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
-    shadowColor: '#0a2c72',
+    shadowColor: BRAND_COLORS.shadowStrong,
     shadowOpacity: 0.32,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: 22 },
@@ -804,22 +908,17 @@ const styles = StyleSheet.create({
   },
   arcadeBulbHalo: {
     position: 'absolute',
-    backgroundColor: 'rgba(255, 239, 170, 0.68)',
+    backgroundColor: 'rgba(225, 240, 255, 0.72)',
   },
   arcadeBulb: {
     backgroundColor: '#e7f1ff',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.72)',
-    shadowColor: '#fff2bd',
+    shadowColor: '#d7ebff',
     shadowOpacity: 0.9,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
-  },
-  machineRim: {
-    padding: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.6)',
   },
   machineCore: {
     padding: 12,
@@ -832,7 +931,7 @@ const styles = StyleSheet.create({
   },
   reelFrame: {
     overflow: 'hidden',
-    backgroundColor: '#ffffff',
+    backgroundColor: BRAND_COLORS.white,
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -879,7 +978,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     justifyContent: 'flex-start',
     overflow: 'hidden',
-    shadowColor: '#0a2c72',
+    shadowColor: BRAND_COLORS.shadowStrong,
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 8,
@@ -906,7 +1005,7 @@ const styles = StyleSheet.create({
     left: 14,
     width: 46,
     height: 46,
-    borderRadius:600,
+    borderRadius: 600,
     shadowColor: '#16386c',
     shadowOpacity: 0.6,
     shadowRadius: 10,
@@ -920,7 +1019,7 @@ const styles = StyleSheet.create({
     height: 58,
     borderRadius: 999,
     overflow: 'hidden',
-    shadowColor: '#8c130a',
+    shadowColor: BRAND_COLORS.primary,
     shadowOpacity: 0.28,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
@@ -947,14 +1046,14 @@ const styles = StyleSheet.create({
   },
   spinInstruction: {
     fontFamily: 'LeagueSpartan_700Bold',
-    color: '#0f4fa8',
+    color: BRAND_COLORS.primary,
     letterSpacing: 1.8,
     textAlign: 'center',
   },
   statusCopy: {
     fontFamily: 'DMSans_500Medium',
     fontSize: 16,
-    color: '#3a5a83',
+    color: BRAND_COLORS.textSecondary,
     textAlign: 'center',
   },
   loadingScreen: {
@@ -972,7 +1071,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.88)',
     alignItems: 'center',
     gap: 16,
-    shadowColor: '#0f4fa8',
+    shadowColor: BRAND_COLORS.primary,
     shadowOpacity: 0.18,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 14 },
@@ -986,7 +1085,7 @@ const styles = StyleSheet.create({
     fontFamily: 'LeagueSpartan_700Bold',
     fontSize: 26,
     textAlign: 'center',
-    color: '#0f4fa8',
+    color: BRAND_COLORS.primary,
   },
   loadingBody: {
     fontFamily: 'DMSans_500Medium',

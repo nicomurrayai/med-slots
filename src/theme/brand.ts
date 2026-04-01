@@ -1,0 +1,48 @@
+export const BRAND_COLORS = {
+  pageTop: '#fbfdff',
+  pageMid: '#eff6ff',
+  pageBottom: '#dbe9ff',
+  bloomPrimary: 'rgba(83, 149, 255, 0.22)',
+  bloomSecondary: 'rgba(177, 211, 255, 0.34)',
+  bloomTertiary: 'rgba(228, 241, 255, 0.8)',
+  surface: '#ffffff',
+  surfaceSoft: '#f6faff',
+  surfaceMuted: '#eaf3ff',
+  stroke: 'rgba(15, 79, 168, 0.14)',
+  strokeStrong: '#99bef4',
+  textPrimary: '#082d63',
+  textSecondary: '#35557d',
+  textMuted: '#6b86aa',
+  primary: '#0f4fa8',
+  primaryStrong: '#0a3978',
+  primarySoft: '#d8e9ff',
+  primaryGlow: 'rgba(19, 86, 181, 0.2)',
+  accent: '#4ea6ff',
+  shadowStrong: '#0a2c72',
+  white: '#ffffff',
+} as const;
+
+export const BRAND_GRADIENTS = {
+  page: [BRAND_COLORS.pageTop, BRAND_COLORS.pageMid, BRAND_COLORS.pageBottom] as const,
+  card: ['rgba(255,255,255,0.96)', 'rgba(244,249,255,0.94)', 'rgba(233,243,255,0.92)'] as const,
+  primaryButton: ['#4eb0ff', '#0f56bf'] as const,
+  primaryButtonPressed: ['#3494ef', '#0d469d'] as const,
+  heroHighlight: ['#fafdff', '#edf5ff'] as const,
+  machineShell: ['#327de0', '#2563ba', '#1a4f9e'] as const,
+  machineDepth: ['#072860', '#0e478f', '#051f4e'] as const,
+  machineCore: ['#1c4a91', '#255ebd', '#1c4a91'] as const,
+  leverMount: ['#0e3568', '#408df5', '#0e3568'] as const,
+  leverKnob: ['#9bd4ff', '#4f9cff', '#0f4fa8'] as const,
+  metallic: ['#e0e8f0', '#b0c4de', '#e0e8f0'] as const,
+  socket: ['#ffffff', '#a8bbce', '#5a6f8a'] as const,
+} as const;
+
+export const BRAND_CONFETTI_COLORS = [
+  '#d7ebff',
+  '#9fd0ff',
+  '#5db6ff',
+  '#2b86f2',
+  '#0f53aa',
+  '#7de2ff',
+  '#b8f1ff',
+] as const;

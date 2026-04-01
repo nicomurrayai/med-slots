@@ -1,0 +1,178 @@
+import { LinearGradient } from 'expo-linear-gradient';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { MED_LOGO } from '../data/slotSymbols';
+import { BRAND_COLORS, BRAND_GRADIENTS } from '../theme/brand';
+
+type IntroHomeScreenProps = {
+  compact: boolean;
+  logoSize: number;
+  panelWidth: number;
+  titleSize: number;
+  onContinue: () => void;
+};
+
+export function IntroHomeScreen({
+  compact,
+  logoSize,
+  panelWidth,
+  titleSize,
+  onContinue,
+}: IntroHomeScreenProps) {
+  const resolvedTitleSize = compact ? Math.min(titleSize + 8, 38) : titleSize + 8;
+  const resolvedLineHeight = compact ? resolvedTitleSize + 2 : resolvedTitleSize + 4;
+
+  return (
+    <View style={styles.stage}>
+      <View style={[styles.cardShadow, { maxWidth: panelWidth }]} />
+
+      <LinearGradient colors={BRAND_GRADIENTS.card} style={[styles.card, { maxWidth: panelWidth }]}>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>JACKPOT MED</Text>
+        </View>
+
+        <Image
+          source={MED_LOGO}
+          resizeMode="contain"
+          style={[
+            styles.logo,
+            {
+              height: logoSize,
+              width: logoSize,
+            },
+          ]}
+        />
+
+        <Text
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          numberOfLines={1}
+          style={[
+            styles.title,
+            {
+              fontSize: resolvedTitleSize,
+              lineHeight: resolvedLineHeight,
+            },
+          ]}
+        >
+          LA SUERTE ESTA
+        </Text>
+
+        <Text
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+          numberOfLines={1}
+          style={[
+            styles.titleAccent,
+            {
+              fontSize: resolvedTitleSize,
+              lineHeight: resolvedLineHeight,
+            },
+          ]}
+        >
+          DE TU LADO
+        </Text>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={onContinue}
+          style={({ pressed }) => [
+            compact && styles.buttonPressableCompact,
+            pressed && styles.buttonPressed,
+          ]}
+        >
+          <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={[styles.button, compact && styles.buttonCompact]}>
+            <Text style={styles.buttonText}>EMPEZAR A JUGAR</Text>
+          </LinearGradient>
+        </Pressable>
+      </LinearGradient>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  stage: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardShadow: {
+    position: 'absolute',
+    alignSelf: 'center',
+    width: '100%',
+    height: '82%',
+    borderRadius: 42,
+    backgroundColor: BRAND_COLORS.primaryGlow,
+    shadowColor: BRAND_COLORS.shadowStrong,
+    shadowOpacity: 0.16,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 22 },
+    elevation: 12,
+  },
+  card: {
+    width: '100%',
+    borderRadius: 42,
+    paddingHorizontal: 28,
+    paddingVertical: 30,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.stroke,
+    overflow: 'hidden',
+  },
+  badge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: BRAND_COLORS.primarySoft,
+    marginBottom: 22,
+  },
+  badgeText: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 12,
+    letterSpacing: 2.2,
+    color: BRAND_COLORS.primary,
+  },
+  logo: {
+    marginBottom: 18,
+  },
+  title: {
+    fontFamily: 'LeagueSpartan_700Bold',
+    color: BRAND_COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  titleAccent: {
+    fontFamily: 'LeagueSpartan_700Bold',
+    color: BRAND_COLORS.primary,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  button: {
+    minWidth: 260,
+    marginTop: 34,
+    paddingHorizontal: 30,
+    paddingVertical: 18,
+    borderRadius: 24,
+    shadowColor: BRAND_COLORS.shadowStrong,
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  buttonPressableCompact: {
+    width: '100%',
+  },
+  buttonCompact: {
+    minWidth: 0,
+    width: '100%',
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.96,
+  },
+  buttonText: {
+    fontFamily: 'LeagueSpartan_700Bold',
+    fontSize: 22,
+    color: BRAND_COLORS.white,
+    textAlign: 'center',
+  },
+});
