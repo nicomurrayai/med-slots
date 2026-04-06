@@ -10,6 +10,7 @@ type IntroHomeScreenProps = {
   panelWidth: number;
   titleSize: number;
   onContinue: () => void;
+  onLogoPress: () => void;
 };
 
 export function IntroHomeScreen({
@@ -18,6 +19,7 @@ export function IntroHomeScreen({
   panelWidth,
   titleSize,
   onContinue,
+  onLogoPress,
 }: IntroHomeScreenProps) {
   const resolvedTitleSize = compact ? Math.min(titleSize + 8, 38) : titleSize + 8;
   const resolvedLineHeight = compact ? resolvedTitleSize + 2 : resolvedTitleSize + 4;
@@ -31,17 +33,23 @@ export function IntroHomeScreen({
           <Text style={styles.badgeText}>JACKPOT MED</Text>
         </View>
 
-        <Image
-          source={MED_LOGO}
-          resizeMode="contain"
-          style={[
-            styles.logo,
-            {
-              height: logoSize,
-              width: logoSize,
-            },
-          ]}
-        />
+        <Pressable
+          accessibilityRole="button"
+          onPress={onLogoPress}
+          style={({ pressed }) => [styles.logoPressable, pressed && styles.logoPressed]}
+        >
+          <Image
+            source={MED_LOGO}
+            resizeMode="contain"
+            style={[
+              styles.logo,
+              {
+                height: logoSize,
+                width: logoSize,
+              },
+            ]}
+          />
+        </Pressable>
 
         <Text
           adjustsFontSizeToFit
@@ -134,6 +142,13 @@ const styles = StyleSheet.create({
   },
   logo: {
     marginBottom: 18,
+  },
+  logoPressable: {
+    borderRadius: 999,
+  },
+  logoPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
   },
   title: {
     fontFamily: 'LeagueSpartan_700Bold',

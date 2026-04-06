@@ -18,3 +18,7 @@ export type SpinResult = {
   isWin: boolean;
   reels: SlotSymbol[];
 };
+
+export type SlotMachineConfig = {
+  winProbabilityPercent: number;
+};

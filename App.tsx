@@ -5,6 +5,7 @@ import {
   LeagueSpartan_700Bold,
   useFonts as useLeagueSpartan,
 } from '@expo-google-fonts/league-spartan';
+import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -30,18 +31,28 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { AdminScreen } from './src/components/AdminScreen';
 import { CelebrationConfetti } from './src/components/CelebrationConfetti';
 import { EmailCaptureScreen } from './src/components/EmailCaptureScreen';
 import { IntroHomeScreen } from './src/components/IntroHomeScreen';
 import { ResultModal } from './src/components/ResultModal';
 import { SlotReel } from './src/components/SlotReel';
 import { MED_LOGO, SLOT_SYMBOLS } from './src/data/slotSymbols';
+import {
+  exportLeadsCsv,
+  getLeadCount,
+  getRecentLeads,
+  initDatabase,
+  saveLead,
+} from './src/services/leadsStorage';
+import { loadSlotMachineConfig, saveSlotMachineConfig } from './src/services/slotConfigStorage';
 import { BRAND_COLORS, BRAND_GRADIENTS } from './src/theme/brand';
-import { GameStatus, ResultModalState, SlotSymbol, SpinResult } from './src/types/slot';
+import { LeadEntry } from './src/types/leads';
+import { GameStatus, ResultModalState, SlotMachineConfig, SlotSymbol, SpinResult } from './src/types/slot';
+import { createDefaultSlotMachineConfig } from './src/utils/slotConfig';
 
 const WIN_MESSAGE = 'Felicitaciones! Ganaste un premio sorpresa.';
 const LOSE_MESSAGE = 'Segui intentando.';
-const WIN_PROBABILITY = 0.18;
 const INITIAL_REELS = [SLOT_SYMBOLS[0], SLOT_SYMBOLS[4], SLOT_SYMBOLS[8]];
 const BASE_REEL_DURATION = 3200;
 const REEL_DURATION_STEP = 520;
@@ -52,8 +63,13 @@ const ARCADE_PULSE_DURATION = 1280;
 const ARCADE_IDLE_GLOW = 0.2;
 const ARCADE_LIGHT_PHASE_STEP = 0.64;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SECRET_LOGO_TAP_TARGET = 5;
+const SECRET_LOGO_TAP_WINDOW_MS = 900;
+const RECENT_LEADS_LIMIT = 20;
+const SLOT_ENTRY_GUARD_MS = 450;
 
-type AppStep = 'home' | 'leadCapture' | 'slot';
+type AppStep = 'home' | 'leadCapture' | 'slot' | 'admin';
+type AdminConfigNoticeTone = 'neutral' | 'success' | 'error';
 
 function createDefaultResultModal(): ResultModalState {
   return {
@@ -72,9 +88,10 @@ function pickRandomSymbol(excludedIds: string[] = []) {
   return pool[Math.floor(Math.random() * pool.length)] ?? SLOT_SYMBOLS[0];
 }
 
-function createSpinResult(): SpinResult {
-  // Slightly bias wins so the promo moment is visible without requiring hundreds of spins.
-  if (Math.random() < WIN_PROBABILITY) {
+function createSpinResult(winProbabilityPercent: number): SpinResult {
+  const winProbability = clamp(winProbabilityPercent, 0, 100) / 100;
+
+  if (Math.random() < winProbability) {
     const winningSymbol = pickRandomSymbol();
 
     return {
@@ -271,19 +288,36 @@ function ArcadeBulb({ active, index, pulse, side, size }: ArcadeBulbProps) {
 export default function App() {
   const { width, height } = useWindowDimensions();
   const [assetsReady, setAssetsReady] = useState(false);
+  const [storageReady, setStorageReady] = useState(false);
+  const [storageError, setStorageError] = useState('');
+  const [storageRetryToken, setStorageRetryToken] = useState(0);
+  const [slotConfig, setSlotConfig] = useState<SlotMachineConfig>(createDefaultSlotMachineConfig);
+  const [slotConfigReady, setSlotConfigReady] = useState(false);
   const [currentStep, setCurrentStep] = useState<AppStep>('home');
   const [capturedEmail, setCapturedEmail] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [isSavingLead, setIsSavingLead] = useState(false);
   const [currentReels, setCurrentReels] = useState<SlotSymbol[]>(INITIAL_REELS);
   const [targetReels, setTargetReels] = useState<SlotSymbol[]>(INITIAL_REELS);
   const [spinToken, setSpinToken] = useState(0);
+  const [isSpinPrimed, setIsSpinPrimed] = useState(false);
   const [status, setStatus] = useState<GameStatus>('idle');
   const [hasTriggeredConfetti, setHasTriggeredConfetti] = useState(false);
   const [confettiBurstKey, setConfettiBurstKey] = useState(0);
   const [resultModal, setResultModal] = useState<ResultModalState>(createDefaultResultModal);
+  const [adminLeadCount, setAdminLeadCount] = useState(0);
+  const [adminRecentLeads, setAdminRecentLeads] = useState<LeadEntry[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminNotice, setAdminNotice] = useState('');
+  const [adminConfigNotice, setAdminConfigNotice] = useState('Se aplica desde la siguiente jugada.');
+  const [adminConfigNoticeTone, setAdminConfigNoticeTone] = useState<AdminConfigNoticeTone>('neutral');
+  const [isSavingSlotConfig, setIsSavingSlotConfig] = useState(false);
+  const [isExportingLeads, setIsExportingLeads] = useState(false);
 
   const pendingResultRef = useRef<SpinResult | null>(null);
   const completedReelsRef = useRef(0);
+  const secretLogoTapCountRef = useRef(0);
+  const lastSecretLogoTapAtRef = useRef(0);
   const arcadePulse = useSharedValue(ARCADE_IDLE_GLOW);
 
   const [leagueLoaded, leagueError] = useLeagueSpartan({
@@ -310,6 +344,61 @@ export default function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    setSlotConfigReady(false);
+
+    loadSlotMachineConfig()
+      .then((storedConfig) => {
+        if (!active) {
+          return;
+        }
+
+        setSlotConfig(storedConfig);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        const fallbackConfig = createDefaultSlotMachineConfig();
+        setSlotConfig(fallbackConfig);
+      })
+      .finally(() => {
+        if (active) {
+          setSlotConfigReady(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    setStorageReady(false);
+    setStorageError('');
+
+    initDatabase()
+      .then(() => {
+        if (active) {
+          setStorageReady(true);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setStorageError('No pudimos preparar la base local del dispositivo.');
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [storageRetryToken]);
 
   useEffect(() => {
     if (!hasTriggeredConfetti) {
@@ -346,7 +435,38 @@ export default function App() {
     });
   }, [arcadePulse, status]);
 
-  const ready = assetsReady && (leagueLoaded || !!leagueError) && (dmLoaded || !!dmError);
+  useEffect(() => {
+    if (currentStep === 'home') {
+      return;
+    }
+
+    secretLogoTapCountRef.current = 0;
+    lastSecretLogoTapAtRef.current = 0;
+  }, [currentStep]);
+
+  useEffect(() => {
+    if (currentStep !== 'slot') {
+      setIsSpinPrimed(false);
+      return;
+    }
+
+    setIsSpinPrimed(false);
+
+    const timer = setTimeout(() => {
+      setIsSpinPrimed(true);
+    }, SLOT_ENTRY_GUARD_MS);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [currentStep]);
+
+  const ready =
+    assetsReady &&
+    slotConfigReady &&
+    storageReady &&
+    (leagueLoaded || !!leagueError) &&
+    (dmLoaded || !!dmError);
 
   const layout = useMemo(() => {
     const pageWidth = Math.min(width, 1280);
@@ -399,6 +519,32 @@ export default function App() {
     setResultModal(createDefaultResultModal());
   };
 
+  const refreshAdminSnapshot = async () => {
+    setAdminLoading(true);
+
+    try {
+      const [leadCount, recentLeads] = await Promise.all([
+        getLeadCount(),
+        getRecentLeads(RECENT_LEADS_LIMIT),
+      ]);
+
+      setAdminLeadCount(leadCount);
+      setAdminRecentLeads(recentLeads);
+    } catch {
+      setAdminNotice('No pudimos leer los datos guardados en este telefono.');
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const openAdminScreen = async () => {
+    setAdminNotice('');
+    setAdminConfigNotice('Se aplica desde la siguiente jugada.');
+    setAdminConfigNoticeTone('neutral');
+    setCurrentStep('admin');
+    await refreshAdminSnapshot();
+  };
+
   const handleOpenLeadCapture = () => {
     setEmailError('');
     setCurrentStep('leadCapture');
@@ -412,7 +558,11 @@ export default function App() {
     }
   };
 
-  const handleEmailSubmit = () => {
+  const handleEmailSubmit = async () => {
+    if (isSavingLead) {
+      return;
+    }
+
     const normalizedEmail = capturedEmail.trim();
 
     if (!isValidEmail(normalizedEmail)) {
@@ -420,23 +570,114 @@ export default function App() {
       return;
     }
 
-    setCapturedEmail(normalizedEmail);
-    setEmailError('');
-    resetSlotState();
-    setCurrentStep('slot');
+    if (!storageReady) {
+      setEmailError(storageError || 'La base local todavia no esta lista en este dispositivo.');
+      return;
+    }
+
+    try {
+      setIsSavingLead(true);
+      await saveLead(normalizedEmail);
+      setCapturedEmail(normalizedEmail);
+      setEmailError('');
+      resetSlotState();
+      setCurrentStep('slot');
+    } catch {
+      setEmailError('No pudimos guardar el correo en la base local. Intenta nuevamente.');
+    } finally {
+      setIsSavingLead(false);
+    }
   };
 
   const handleGoBackHome = () => {
     setEmailError('');
+    setAdminNotice('');
+    setAdminConfigNotice('Se aplica desde la siguiente jugada.');
+    setAdminConfigNoticeTone('neutral');
     setCurrentStep('home');
   };
 
-  const handleSpin = () => {
-    if (status === 'spinning') {
+  const handleProbabilityComplete = async (value: number) => {
+    const nextWinProbabilityPercent = Math.round(clamp(value, 0, 100));
+
+    if (nextWinProbabilityPercent === slotConfig.winProbabilityPercent) {
+      setAdminConfigNotice('Se aplica desde la siguiente jugada.');
+      setAdminConfigNoticeTone('neutral');
       return;
     }
 
-    const result = createSpinResult();
+    try {
+      setIsSavingSlotConfig(true);
+
+      const nextConfig = await saveSlotMachineConfig({
+        ...slotConfig,
+        winProbabilityPercent: nextWinProbabilityPercent,
+      });
+
+      setSlotConfig(nextConfig);
+      setAdminConfigNotice('Guardado en este dispositivo.');
+      setAdminConfigNoticeTone('success');
+    } catch {
+      setAdminConfigNotice('No pudimos guardar este ajuste.');
+      setAdminConfigNoticeTone('error');
+    } finally {
+      setIsSavingSlotConfig(false);
+    }
+  };
+
+  const handleSecretLogoPress = () => {
+    const now = Date.now();
+    const withinSequenceWindow = now - lastSecretLogoTapAtRef.current <= SECRET_LOGO_TAP_WINDOW_MS;
+
+    secretLogoTapCountRef.current = withinSequenceWindow ? secretLogoTapCountRef.current + 1 : 1;
+    lastSecretLogoTapAtRef.current = now;
+
+    if (secretLogoTapCountRef.current < SECRET_LOGO_TAP_TARGET) {
+      return;
+    }
+
+    secretLogoTapCountRef.current = 0;
+    lastSecretLogoTapAtRef.current = 0;
+    void openAdminScreen();
+  };
+
+  const handleExportLeads = async () => {
+    if (isExportingLeads) {
+      return;
+    }
+
+    setAdminNotice('');
+    setIsExportingLeads(true);
+
+    try {
+      const exportResult = await exportLeadsCsv();
+      const sharingAvailable = await Sharing.isAvailableAsync();
+
+      if (sharingAvailable) {
+        await Sharing.shareAsync(exportResult.fileUri, {
+          dialogTitle: 'Exportar leads MED',
+          mimeType: 'text/csv',
+        });
+      }
+
+      setAdminNotice(
+        sharingAvailable
+          ? `CSV listo con ${exportResult.totalLeads} registros.`
+          : `CSV generado en el dispositivo: ${exportResult.fileName}`,
+      );
+    } catch {
+      setAdminNotice('No pudimos generar el archivo CSV en este dispositivo.');
+    } finally {
+      setIsExportingLeads(false);
+    }
+  };
+
+  const handleSpin = () => {
+    if (currentStep !== 'slot' || !isSpinPrimed || status === 'spinning') {
+      return;
+    }
+
+    const result = createSpinResult(slotConfig.winProbabilityPercent);
     pendingResultRef.current = result;
     completedReelsRef.current = 0;
 
@@ -488,6 +729,31 @@ export default function App() {
   const machineDepthY = layout.compact ? 14 : 24;
   const sideLightSize = layout.compact ? 10 : 14;
 
+  if (storageError) {
+    return (
+      <LinearGradient colors={BRAND_GRADIENTS.page} style={styles.loadingScreen}>
+        <View style={styles.loadingCard}>
+          <Image source={MED_LOGO} resizeMode="contain" style={styles.loadingLogo} />
+          <Text style={styles.loadingTitle}>No pudimos iniciar la base local</Text>
+          <Text style={styles.loadingBody}>
+            Reintenta antes de usar la app para asegurarnos de que todos los correos se guarden offline.
+          </Text>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setStorageRetryToken((value) => value + 1)}
+            style={({ pressed }) => [styles.retryPressable, pressed && styles.retryPressed]}
+          >
+            <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={styles.retryButton}>
+              <Text style={styles.retryButtonText}>REINTENTAR</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+        <StatusBar style="dark" />
+      </LinearGradient>
+    );
+  }
+
   if (!ready) {
     return (
       <LinearGradient colors={BRAND_GRADIENTS.page} style={styles.loadingScreen}>
@@ -495,7 +761,7 @@ export default function App() {
           <Image source={MED_LOGO} resizeMode="contain" style={styles.loadingLogo} />
           <ActivityIndicator color={BRAND_COLORS.primary} size="large" />
           <Text style={styles.loadingTitle}>Preparando la maquina MED...</Text>
-          <Text style={styles.loadingBody}>Cargando branding, premios y animaciones.</Text>
+          <Text style={styles.loadingBody}>Cargando branding, premios, ajustes y animaciones.</Text>
         </View>
         <StatusBar style="dark" />
       </LinearGradient>
@@ -526,6 +792,7 @@ export default function App() {
             compact={layout.compact}
             logoSize={layout.logoSize}
             onContinue={handleOpenLeadCapture}
+            onLogoPress={handleSecretLogoPress}
             panelWidth={layout.homePanelWidth}
             titleSize={layout.titleSize}
           />
@@ -534,12 +801,33 @@ export default function App() {
         {currentStep === 'leadCapture' ? (
           <EmailCaptureScreen
             compact={layout.compact}
+            disabled={isSavingLead}
             email={capturedEmail}
             errorMessage={emailError}
             onBack={handleGoBackHome}
             onChangeEmail={handleEmailChange}
             onSubmit={handleEmailSubmit}
             panelWidth={layout.emailPanelWidth}
+            submitLabel={isSavingLead ? 'GUARDANDO...' : 'RECLAMAR TIRO GRATIS'}
+          />
+        ) : null}
+
+        {currentStep === 'admin' ? (
+          <AdminScreen
+            compact={layout.compact}
+            isExporting={isExportingLeads}
+            isLoading={adminLoading}
+            isSavingProbability={isSavingSlotConfig}
+            noticeMessage={adminNotice}
+            onBack={handleGoBackHome}
+            onExport={handleExportLeads}
+            onProbabilityComplete={handleProbabilityComplete}
+            panelWidth={layout.emailPanelWidth}
+            probabilityNoticeMessage={adminConfigNotice}
+            probabilityNoticeTone={adminConfigNoticeTone}
+            recentLeads={adminRecentLeads}
+            totalLeads={adminLeadCount}
+            winProbabilityPercent={slotConfig.winProbabilityPercent}
           />
         ) : null}
 
@@ -725,7 +1013,7 @@ export default function App() {
 
                 <LeverButton
                   compact={layout.compact}
-                  disabled={status === 'spinning'}
+                  disabled={!isSpinPrimed || status === 'spinning'}
                   onPress={handleSpin}
                   spinToken={spinToken}
                 />
@@ -1080,6 +1368,26 @@ const styles = StyleSheet.create({
   loadingLogo: {
     width: 92,
     height: 92,
+  },
+  retryPressable: {
+    width: '100%',
+  },
+  retryPressed: {
+    opacity: 0.96,
+    transform: [{ scale: 0.985 }],
+  },
+  retryButton: {
+    width: '100%',
+    minHeight: 64,
+    justifyContent: 'center',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+  },
+  retryButtonText: {
+    fontFamily: 'LeagueSpartan_700Bold',
+    fontSize: 20,
+    color: BRAND_COLORS.white,
+    textAlign: 'center',
   },
   loadingTitle: {
     fontFamily: 'LeagueSpartan_700Bold',

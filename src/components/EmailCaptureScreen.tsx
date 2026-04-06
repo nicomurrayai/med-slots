@@ -5,22 +5,26 @@ import { BRAND_COLORS, BRAND_GRADIENTS } from '../theme/brand';
 
 type EmailCaptureScreenProps = {
   compact: boolean;
+  disabled?: boolean;
   email: string;
   errorMessage: string;
   panelWidth: number;
   onBack: () => void;
   onChangeEmail: (value: string) => void;
   onSubmit: () => void;
+  submitLabel?: string;
 };
 
 export function EmailCaptureScreen({
   compact,
+  disabled = false,
   email,
   errorMessage,
   panelWidth,
   onBack,
   onChangeEmail,
   onSubmit,
+  submitLabel = 'RECLAMAR TIRO GRATIS',
 }: EmailCaptureScreenProps) {
   return (
     <View style={styles.stage}>
@@ -39,6 +43,7 @@ export function EmailCaptureScreen({
             autoCapitalize="none"
             autoComplete="email"
             autoCorrect={false}
+            editable={!disabled}
             inputMode="email"
             keyboardType="email-address"
             onChangeText={onChangeEmail}
@@ -56,11 +61,16 @@ export function EmailCaptureScreen({
 
         <Pressable
           accessibilityRole="button"
+          disabled={disabled}
           onPress={onSubmit}
-          style={({ pressed }) => [styles.buttonPressable, pressed && styles.buttonPressed]}
+          style={({ pressed }) => [
+            styles.buttonPressable,
+            pressed && !disabled && styles.buttonPressed,
+            disabled && styles.buttonDisabled,
+          ]}
         >
           <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={styles.button}>
-            <Text style={styles.buttonText}>RECLAMAR TIRO GRATIS</Text>
+            <Text style={styles.buttonText}>{submitLabel}</Text>
           </LinearGradient>
         </Pressable>
 
@@ -182,6 +192,9 @@ const styles = StyleSheet.create({
     width: '100%',
     opacity: 0.96,
     transform: [{ scale: 0.985 }],
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
     fontFamily: 'LeagueSpartan_700Bold',
