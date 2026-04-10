@@ -23,13 +23,16 @@ export function ResultModal({ isOpen, message, onClose, title, variant }: Result
       >
         <View style={[styles.cardAccent, variant === 'win' ? styles.cardAccentWin : styles.cardAccentLose]} />
         <View style={styles.card}>
-          <Text style={styles.eyebrow}>{variant === 'win' ? 'MODO CELEBRACION' : 'NUEVA OPORTUNIDAD'}</Text>
           <Text style={styles.title}>{title}</Text>
-          <Text style={styles.body}>{message}</Text>
+          {message ? <Text style={styles.body}>{message}</Text> : null}
           <Pressable
             accessibilityRole="button"
             onPress={onClose}
-            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+            style={({ pressed }) => [
+              styles.button,
+              !message && styles.buttonWithTitleGap,
+              pressed && styles.buttonPressed,
+            ]}
           >
             <Text style={styles.buttonText}>Volver al inicio</Text>
           </Pressable>
@@ -103,6 +106,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#0f4fa8',
     alignItems: 'center',
+  },
+  buttonWithTitleGap: {
+    marginTop: 18,
   },
   buttonPressed: {
     opacity: 0.9,

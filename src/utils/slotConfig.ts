@@ -12,6 +12,7 @@ export function clampWinProbabilityPercent(value: number) {
 
 export function createDefaultSlotMachineConfig(): SlotMachineConfig {
   return {
+    appBlocked: false,
     winProbabilityPercent: DEFAULT_WIN_PROBABILITY_PERCENT,
   };
 }
@@ -24,6 +25,7 @@ export function normalizeSlotMachineConfig(config: unknown): SlotMachineConfig {
   const candidate = config as Partial<Record<keyof SlotMachineConfig, unknown>>;
 
   return {
+    appBlocked: Boolean(candidate.appBlocked),
     winProbabilityPercent: clampWinProbabilityPercent(Number(candidate.winProbabilityPercent)),
   };
 }

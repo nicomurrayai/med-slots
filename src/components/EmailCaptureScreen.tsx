@@ -24,18 +24,14 @@ export function EmailCaptureScreen({
   onBack,
   onChangeEmail,
   onSubmit,
-  submitLabel = 'RECLAMAR TIRO GRATIS',
+  submitLabel = 'Registrarme',
 }: EmailCaptureScreenProps) {
   return (
     <View style={styles.stage}>
       <View style={[styles.cardShadow, { maxWidth: panelWidth }]} />
 
       <LinearGradient colors={BRAND_GRADIENTS.card} style={[styles.card, { maxWidth: panelWidth }]}>
-        <Text style={styles.title}>QUIERES JUGAR?</Text>
-
-        <Text style={[styles.subtitle, compact && styles.subtitleCompact]}>
-          Ingresa tu correo para activar la Maquina Jackpot
-        </Text>
+        <Text style={styles.title}>Ingresá tu mail</Text>
 
         <View style={[styles.inputShell, !!errorMessage && styles.inputShellError]}>
           <TextInput
@@ -117,22 +113,9 @@ const styles = StyleSheet.create({
     color: BRAND_COLORS.textPrimary,
     textAlign: 'center',
   },
-  subtitle: {
-    marginTop: 18,
-    maxWidth: 760,
-    fontFamily: 'DMSans_700Bold',
-    fontSize: 18,
-    lineHeight: 28,
-    color: BRAND_COLORS.textMuted,
-    textAlign: 'center',
-  },
-  subtitleCompact: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
   inputShell: {
     width: '100%',
-    marginTop: 28,
+    marginTop: 24,
     borderRadius: 24,
     borderWidth: 2,
     borderColor: BRAND_COLORS.strokeStrong,

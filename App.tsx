@@ -1,4 +1,4 @@
-import { Asset } from 'expo-asset';
+  import { Asset } from 'expo-asset';
 import { DMSans_500Medium, DMSans_700Bold, useFonts as useDMSans } from '@expo-google-fonts/dm-sans';
 import {
   LeagueSpartan_600SemiBold,
@@ -40,7 +40,6 @@ import { SlotReel } from './src/components/SlotReel';
 import { MED_LOGO, SLOT_SYMBOLS } from './src/data/slotSymbols';
 import {
   exportLeadsCsv,
-  getLeadCount,
   getRecentLeads,
   initDatabase,
   saveLead,
@@ -52,7 +51,7 @@ import { GameStatus, ResultModalState, SlotMachineConfig, SlotSymbol, SpinResult
 import { createDefaultSlotMachineConfig } from './src/utils/slotConfig';
 
 const WIN_MESSAGE = 'Felicitaciones! Ganaste un premio sorpresa.';
-const LOSE_MESSAGE = 'Segui intentando.';
+const LOSE_MESSAGE = '';
 const INITIAL_REELS = [SLOT_SYMBOLS[0], SLOT_SYMBOLS[4], SLOT_SYMBOLS[8]];
 const BASE_REEL_DURATION = 3200;
 const REEL_DURATION_STEP = 520;
@@ -159,8 +158,18 @@ function LeverButton({ compact, disabled, onPress, spinToken }: LeverButtonProps
     ],
   }));
 
+  const leverWrapStyle = compact
+    ? {
+        right: -88,
+        transform: [{ translateY: -84 }, { scale: 0.86 }],
+      }
+    : {
+        right: -130,
+        transform: [{ translateY: -107 }],
+      };
+
   return (
-    <View style={[styles.leverWrap, compact && styles.leverWrapCompact]}>
+    <View style={[styles.leverWrap, leverWrapStyle]}>
       <Pressable
         accessibilityLabel="Tirar la palanca"
         accessibilityRole="button"
@@ -305,13 +314,14 @@ export default function App() {
   const [hasTriggeredConfetti, setHasTriggeredConfetti] = useState(false);
   const [confettiBurstKey, setConfettiBurstKey] = useState(0);
   const [resultModal, setResultModal] = useState<ResultModalState>(createDefaultResultModal);
-  const [adminLeadCount, setAdminLeadCount] = useState(0);
   const [adminRecentLeads, setAdminRecentLeads] = useState<LeadEntry[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminNotice, setAdminNotice] = useState('');
   const [adminConfigNotice, setAdminConfigNotice] = useState('Se aplica desde la siguiente jugada.');
   const [adminConfigNoticeTone, setAdminConfigNoticeTone] = useState<AdminConfigNoticeTone>('neutral');
   const [isSavingSlotConfig, setIsSavingSlotConfig] = useState(false);
+  const [isSavingAppBlock, setIsSavingAppBlock] = useState(false);
+  const [adminAppBlockNotice, setAdminAppBlockNotice] = useState('La app esta disponible para participar.');
   const [isExportingLeads, setIsExportingLeads] = useState(false);
 
   const pendingResultRef = useRef<SpinResult | null>(null);
@@ -445,6 +455,26 @@ export default function App() {
   }, [currentStep]);
 
   useEffect(() => {
+    setAdminAppBlockNotice(
+      slotConfig.appBlocked
+        ? 'La app esta bloqueada en este dispositivo.'
+        : 'La app esta disponible para participar.',
+    );
+  }, [slotConfig.appBlocked]);
+
+  useEffect(() => {
+    if (!slotConfig.appBlocked) {
+      return;
+    }
+
+    if (currentStep === 'leadCapture' || currentStep === 'slot') {
+      setEmailError('');
+      resetSlotState();
+      setCurrentStep('home');
+    }
+  }, [currentStep, slotConfig.appBlocked]);
+
+  useEffect(() => {
     if (currentStep !== 'slot') {
       setIsSpinPrimed(false);
       return;
@@ -514,6 +544,7 @@ export default function App() {
     completedReelsRef.current = 0;
     setCurrentReels(INITIAL_REELS);
     setTargetReels(INITIAL_REELS);
+    setSpinToken(0);
     setStatus('idle');
     setHasTriggeredConfetti(false);
     setResultModal(createDefaultResultModal());
@@ -523,12 +554,7 @@ export default function App() {
     setAdminLoading(true);
 
     try {
-      const [leadCount, recentLeads] = await Promise.all([
-        getLeadCount(),
-        getRecentLeads(RECENT_LEADS_LIMIT),
-      ]);
-
-      setAdminLeadCount(leadCount);
+      const recentLeads = await getRecentLeads(RECENT_LEADS_LIMIT);
       setAdminRecentLeads(recentLeads);
     } catch {
       setAdminNotice('No pudimos leer los datos guardados en este telefono.');
@@ -541,11 +567,20 @@ export default function App() {
     setAdminNotice('');
     setAdminConfigNotice('Se aplica desde la siguiente jugada.');
     setAdminConfigNoticeTone('neutral');
+    setAdminAppBlockNotice(
+      slotConfig.appBlocked
+        ? 'La app esta bloqueada en este dispositivo.'
+        : 'La app esta disponible para participar.',
+    );
     setCurrentStep('admin');
     await refreshAdminSnapshot();
   };
 
   const handleOpenLeadCapture = () => {
+    if (slotConfig.appBlocked) {
+      return;
+    }
+
     setEmailError('');
     setCurrentStep('leadCapture');
   };
@@ -622,6 +657,30 @@ export default function App() {
       setAdminConfigNoticeTone('error');
     } finally {
       setIsSavingSlotConfig(false);
+    }
+  };
+
+  const handleAppBlockChange = async (value: boolean) => {
+    if (value === slotConfig.appBlocked) {
+      return;
+    }
+
+    try {
+      setIsSavingAppBlock(true);
+
+      const nextConfig = await saveSlotMachineConfig({
+        ...slotConfig,
+        appBlocked: value,
+      });
+
+      setSlotConfig(nextConfig);
+      setAdminAppBlockNotice(
+        value ? 'Bloqueo activado en este dispositivo.' : 'Bloqueo desactivado. La app vuelve a estar abierta.',
+      );
+    } catch {
+      setAdminAppBlockNotice('No pudimos guardar el bloqueo de la app.');
+    } finally {
+      setIsSavingAppBlock(false);
     }
   };
 
@@ -724,7 +783,7 @@ export default function App() {
   const statusCopy =
     status === 'spinning'
       ? 'Tus equipos ya estan girando.'
-      : 'Tres iguales desbloquean un premio sorpresa.';
+      : '';
   const machineDepthX = layout.compact ? 10 : 22;
   const machineDepthY = layout.compact ? 14 : 24;
   const sideLightSize = layout.compact ? 10 : 14;
@@ -790,6 +849,8 @@ export default function App() {
         {currentStep === 'home' ? (
           <IntroHomeScreen
             compact={layout.compact}
+            isAppBlocked={slotConfig.appBlocked}
+            lockedMessage="Acercate mas tarde para participar."
             logoSize={layout.logoSize}
             onContinue={handleOpenLeadCapture}
             onLogoPress={handleSecretLogoPress}
@@ -808,17 +869,21 @@ export default function App() {
             onChangeEmail={handleEmailChange}
             onSubmit={handleEmailSubmit}
             panelWidth={layout.emailPanelWidth}
-            submitLabel={isSavingLead ? 'GUARDANDO...' : 'RECLAMAR TIRO GRATIS'}
+            submitLabel={isSavingLead ? 'GUARDANDO...' : 'Registrarme'}
           />
         ) : null}
 
         {currentStep === 'admin' ? (
           <AdminScreen
+            appBlocked={slotConfig.appBlocked}
             compact={layout.compact}
             isExporting={isExportingLeads}
             isLoading={adminLoading}
+            isSavingAppBlock={isSavingAppBlock}
             isSavingProbability={isSavingSlotConfig}
+            lockNoticeMessage={adminAppBlockNotice}
             noticeMessage={adminNotice}
+            onAppBlockChange={handleAppBlockChange}
             onBack={handleGoBackHome}
             onExport={handleExportLeads}
             onProbabilityComplete={handleProbabilityComplete}
@@ -826,7 +891,6 @@ export default function App() {
             probabilityNoticeMessage={adminConfigNotice}
             probabilityNoticeTone={adminConfigNoticeTone}
             recentLeads={adminRecentLeads}
-            totalLeads={adminLeadCount}
             winProbabilityPercent={slotConfig.winProbabilityPercent}
           />
         ) : null}
@@ -847,32 +911,6 @@ export default function App() {
                   ]}
                 />
 
-                <Text
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.7}
-                  numberOfLines={1}
-                  style={[
-                    styles.heroTitle,
-                    {
-                      fontSize: layout.titleSize,
-                      lineHeight: layout.compact ? 32 : 58,
-                    },
-                  ]}
-                >
-                  GANA PREMIOS AL INSTANTE
-                </Text>
-
-                <Text
-                  style={[
-                    styles.heroTitle,
-                    {
-                      fontSize: layout.titleSize,
-                      lineHeight: layout.compact ? 32 : 58,
-                    },
-                  ]}
-                >
-                  JUGA AHORA
-                </Text>
               </View>
             </View>
 
@@ -1021,10 +1059,7 @@ export default function App() {
             </View>
 
             <View style={styles.footerCopy}>
-              <Text style={[styles.spinInstruction, { fontSize: layout.compact ? 30 : 38 }]}>
-                TIRA DE LA PALANCA
-              </Text>
-              <Text style={styles.statusCopy}>{statusCopy}</Text>
+              {statusCopy ? <Text style={styles.statusCopy}>{statusCopy}</Text> : null}
             </View>
           </>
         ) : null}
@@ -1036,7 +1071,7 @@ export default function App() {
         isOpen={resultModal.isOpen}
         message={resultModal.message}
         onClose={closeModal}
-        title={resultModal.variant === 'win' ? 'Resultado ganador' : 'Resultado de la tirada'}
+        title={resultModal.variant === 'win' ? 'Ganaste' : 'Perdiste'}
         variant={resultModal.variant}
       />
 
@@ -1133,6 +1168,7 @@ const styles = StyleSheet.create({
   machineAssembly: {
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   machineCabinet: {
     position: 'relative',
@@ -1228,14 +1264,9 @@ const styles = StyleSheet.create({
   },
   leverWrap: {
     position: 'absolute',
-    right: -130,
+    top: '50%',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  leverWrapCompact: {
-    position: 'relative',
-    right: 0,
-    marginTop: 18,
   },
   leverPressable: {
     alignItems: 'center',

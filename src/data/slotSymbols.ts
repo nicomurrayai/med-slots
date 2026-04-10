@@ -1,6 +1,7 @@
 import { SlotSymbol } from '../types/slot';
 
 export const MED_LOGO = require('../../public/logo.png');
+export const HOME_MACHINE_PREVIEW = require('../../public/slot.png');
 
 export const SLOT_SYMBOLS: SlotSymbol[] = [
   { id: 'juego-imagenes-01', label: 'Equipo 01', imageSource: require('../../public/juego-imagenes-01.png') },

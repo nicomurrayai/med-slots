@@ -1,11 +1,13 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { MED_LOGO } from '../data/slotSymbols';
+import { HOME_MACHINE_PREVIEW, MED_LOGO } from '../data/slotSymbols';
 import { BRAND_COLORS, BRAND_GRADIENTS } from '../theme/brand';
 
 type IntroHomeScreenProps = {
   compact: boolean;
+  isAppBlocked?: boolean;
+  lockedMessage?: string;
   logoSize: number;
   panelWidth: number;
   titleSize: number;
@@ -15,6 +17,8 @@ type IntroHomeScreenProps = {
 
 export function IntroHomeScreen({
   compact,
+  isAppBlocked = false,
+  lockedMessage = 'Acercate mas tarde para participar.',
   logoSize,
   panelWidth,
   titleSize,
@@ -23,16 +27,14 @@ export function IntroHomeScreen({
 }: IntroHomeScreenProps) {
   const resolvedTitleSize = compact ? Math.min(titleSize + 8, 38) : titleSize + 8;
   const resolvedLineHeight = compact ? resolvedTitleSize + 2 : resolvedTitleSize + 4;
+  const previewWidth = Math.min(panelWidth - (compact ? 40 : 56), compact ? 320 : 520);
+  const previewHeight = previewWidth * 0.456;
 
   return (
     <View style={styles.stage}>
       <View style={[styles.cardShadow, { maxWidth: panelWidth }]} />
 
       <LinearGradient colors={BRAND_GRADIENTS.card} style={[styles.card, { maxWidth: panelWidth }]}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>JACKPOT MED</Text>
-        </View>
-
         <Pressable
           accessibilityRole="button"
           onPress={onLogoPress}
@@ -63,7 +65,7 @@ export function IntroHomeScreen({
             },
           ]}
         >
-          LA SUERTE ESTA
+          Jugá con MED
         </Text>
 
         <Text
@@ -78,21 +80,39 @@ export function IntroHomeScreen({
             },
           ]}
         >
-          DE TU LADO
+          y Ganá
         </Text>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={onContinue}
-          style={({ pressed }) => [
-            compact && styles.buttonPressableCompact,
-            pressed && styles.buttonPressed,
+        {!isAppBlocked ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onContinue}
+            style={({ pressed }) => [
+              compact && styles.buttonPressableCompact,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={[styles.button, compact && styles.buttonCompact]}>
+              <Text style={styles.buttonText}>Comenzar</Text>
+            </LinearGradient>
+          </Pressable>
+        ) : (
+          <View style={[styles.lockedMessageWrap, compact && styles.lockedMessageWrapCompact]}>
+            <Text style={styles.lockedMessage}>{lockedMessage}</Text>
+          </View>
+        )}
+
+        <Image
+          source={HOME_MACHINE_PREVIEW}
+          resizeMode="contain"
+          style={[
+            styles.previewImage,
+            {
+              width: previewWidth,
+              height: previewHeight,
+            },
           ]}
-        >
-          <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={[styles.button, compact && styles.buttonCompact]}>
-            <Text style={styles.buttonText}>EMPEZAR A JUGAR</Text>
-          </LinearGradient>
-        </Pressable>
+        />
       </LinearGradient>
     </View>
   );
@@ -126,19 +146,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BRAND_COLORS.stroke,
     overflow: 'hidden',
-  },
-  badge: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: BRAND_COLORS.primarySoft,
-    marginBottom: 22,
-  },
-  badgeText: {
-    fontFamily: 'DMSans_700Bold',
-    fontSize: 12,
-    letterSpacing: 2.2,
-    color: BRAND_COLORS.primary,
   },
   logo: {
     marginBottom: 18,
@@ -189,5 +196,28 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: BRAND_COLORS.white,
     textAlign: 'center',
+  },
+  lockedMessageWrap: {
+    marginTop: 34,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 24,
+    backgroundColor: BRAND_COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.strokeStrong,
+  },
+  lockedMessageWrapCompact: {
+    width: '100%',
+  },
+  lockedMessage: {
+    fontFamily: 'DMSans_700Bold',
+    fontSize: 20,
+    lineHeight: 26,
+    color: BRAND_COLORS.primaryStrong,
+    textAlign: 'center',
+  },
+  previewImage: {
+    marginTop: 26,
+    alignSelf: 'center',
   },
 });

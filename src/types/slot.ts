@@ -20,5 +20,6 @@ export type SpinResult = {
 };
 
 export type SlotMachineConfig = {
+  appBlocked: boolean;
   winProbabilityPercent: number;
 };

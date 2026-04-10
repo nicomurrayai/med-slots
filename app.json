@@ -20,7 +20,8 @@
         "foregroundImage": "./public/logo.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.nikomurray.medslotmachine"
     },
     "web": {
       "favicon": "./public/logo.png"
@@ -29,6 +30,11 @@
       "expo-font",
       "expo-asset",
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0a9fc1ce-40da-4c10-bd65-4dda6ba3d31f"
+      }
+    }
   }
 }
