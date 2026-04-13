@@ -2,24 +2,40 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { PrizeQuotaSection } from './PrizeQuotaSection';
 import { LeadEntry } from '../types/leads';
+import { EventDay, PrizeDayValues, PrizeQuotaSummary } from '../types/slot';
 import { BRAND_COLORS, BRAND_GRADIENTS } from '../theme/brand';
 import { formatLeadTimestamp } from '../utils/leads';
 
 type AdminScreenProps = {
   appBlocked: boolean;
+  awardedPrizeCounts: PrizeDayValues;
   compact: boolean;
+  currentEventDay: EventDay;
+  dailyPrizeLimits: PrizeDayValues;
+  isClearingLeads: boolean;
   isExporting: boolean;
   isLoading: boolean;
+  isResettingPrizes: boolean;
   isSavingAppBlock: boolean;
+  isSavingPrizeQuota: boolean;
   isSavingProbability: boolean;
   lockNoticeMessage: string;
   noticeMessage: string;
+  onAwardedCountAdjust: (delta: -1 | 1) => void;
   onBack: () => void;
   onAppBlockChange: (value: boolean) => void;
+  onClearLeads: () => void;
+  onCurrentEventDayChange: (day: EventDay) => void;
+  onDailyPrizeLimitComplete: (day: EventDay, value: number) => void;
   onExport: () => void;
   onProbabilityComplete: (value: number) => void;
+  onResetPrizes: () => void;
   panelWidth: number;
+  prizeQuotaNoticeMessage: string;
+  prizeQuotaNoticeTone: 'neutral' | 'success' | 'error';
+  prizeQuotaSummary: PrizeQuotaSummary;
   probabilityNoticeMessage: string;
   probabilityNoticeTone: 'neutral' | 'success' | 'error';
   recentLeads: LeadEntry[];
@@ -109,16 +125,16 @@ function ProbabilityControlSection({
   const displayNoticeTone = isDirty ? 'neutral' : noticeTone;
 
   return (
-    <SectionCard title="Premios">
-      <Text style={styles.probabilityCopy}>Define el %.</Text>
+    <SectionCard title="Probabilidad">
+      <Text style={styles.probabilityCopy}>Define el % de premio que la maquina intentara dar.</Text>
 
-      <View style={[styles.probabilityControlsRow, compact && styles.probabilityControlsRowCompact]}>
+      <View style={styles.probabilityControlsColumn}>
         <View style={[styles.probabilityMeter, styles.probabilityMeterMain]}>
           <Text style={styles.probabilityValue}>{draftValue}%</Text>
           <Text style={styles.probabilityHint}>Actual</Text>
         </View>
 
-        <View style={[styles.probabilityMeter, styles.probabilityInputCard, compact && styles.probabilityInputCardCompact]}>
+        <View style={[styles.probabilityMeter, styles.probabilityInputCard]}>
           <Text style={styles.probabilityInputLabel}>Nuevo</Text>
           <View style={styles.probabilityInputWrap}>
             <TextInput
@@ -176,7 +192,7 @@ function AppBlockSection({
 }) {
   return (
     <SectionCard title="Acceso">
-      <View style={[styles.toggleRow, compact && styles.toggleRowCompact]}>
+      <View style={styles.toggleColumn}>
         <View style={styles.toggleCopy}>
           <Text style={styles.toggleTitle}>App bloqueada</Text>
         </View>
@@ -240,29 +256,71 @@ function RecentLeadsSection({
 }
 
 function AdminActionsSection({
+  isClearingLeads,
   isExporting,
+  isResettingPrizes,
   noticeMessage,
+  onClearLeads,
   onExport,
+  onResetPrizes,
 }: {
+  isClearingLeads: boolean;
   isExporting: boolean;
+  isResettingPrizes: boolean;
   noticeMessage: string;
+  onClearLeads: () => void;
   onExport: () => void;
+  onResetPrizes: () => void;
 }) {
+  const isBusy = isExporting || isClearingLeads || isResettingPrizes;
+
   return (
-    <SectionCard title="Exportar">
+    <SectionCard title="Datos">
       <Pressable
         accessibilityRole="button"
-        disabled={isExporting}
+        disabled={isBusy}
         onPress={onExport}
         style={({ pressed }) => [
           styles.actionButtonPressable,
-          pressed && !isExporting && styles.actionButtonPressed,
-          isExporting && styles.actionButtonDisabled,
+          pressed && !isBusy && styles.actionButtonPressed,
+          isBusy && styles.actionButtonDisabled,
         ]}
       >
         <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={styles.actionButton}>
           <Text style={styles.actionButtonText}>{isExporting ? 'EXPORTANDO...' : 'EXPORTAR CSV'}</Text>
         </LinearGradient>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        disabled={isBusy}
+        onPress={onClearLeads}
+        style={({ pressed }) => [
+          styles.secondaryActionPressable,
+          pressed && !isBusy && styles.secondaryActionPressed,
+          isBusy && styles.actionButtonDisabled,
+        ]}
+      >
+        <View style={styles.secondaryActionButton}>
+          <Text style={styles.secondaryActionText}>{isClearingLeads ? 'BORRANDO...' : 'RESETEAR MAILS'}</Text>
+        </View>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        disabled={isBusy}
+        onPress={onResetPrizes}
+        style={({ pressed }) => [
+          styles.secondaryActionPressable,
+          pressed && !isBusy && styles.secondaryActionPressed,
+          isBusy && styles.actionButtonDisabled,
+        ]}
+      >
+        <View style={styles.secondaryActionButton}>
+          <Text style={styles.secondaryActionText}>
+            {isResettingPrizes ? 'RESETEANDO...' : 'RESETEAR PREMIOS'}
+          </Text>
+        </View>
       </Pressable>
 
       {!!noticeMessage ? <Text style={styles.noticeMessage}>{noticeMessage}</Text> : null}
@@ -272,18 +330,32 @@ function AdminActionsSection({
 
 export function AdminScreen({
   appBlocked,
+  awardedPrizeCounts,
   compact,
+  currentEventDay,
+  dailyPrizeLimits,
+  isClearingLeads,
   isExporting,
   isLoading,
+  isResettingPrizes,
   isSavingAppBlock,
+  isSavingPrizeQuota,
   isSavingProbability,
   lockNoticeMessage,
   noticeMessage,
+  onAwardedCountAdjust,
   onBack,
   onAppBlockChange,
+  onClearLeads,
+  onCurrentEventDayChange,
+  onDailyPrizeLimitComplete,
   onExport,
   onProbabilityComplete,
+  onResetPrizes,
   panelWidth,
+  prizeQuotaNoticeMessage,
+  prizeQuotaNoticeTone,
+  prizeQuotaSummary,
   probabilityNoticeMessage,
   probabilityNoticeTone,
   recentLeads,
@@ -294,7 +366,7 @@ export function AdminScreen({
       <View style={[styles.cardShadow, { maxWidth: panelWidth }]} />
 
       <LinearGradient colors={BRAND_GRADIENTS.card} style={[styles.card, { maxWidth: panelWidth }]}>
-        <View style={[styles.headerRow, compact && styles.headerRowCompact]}>
+        <View style={styles.headerColumn}>
           <View style={styles.headerCopy}>
             <Text style={styles.kicker}>PANEL OCULTO</Text>
             <Text style={[styles.title, compact && styles.titleCompact]}>AJUSTES</Text>
@@ -309,6 +381,18 @@ export function AdminScreen({
           </Pressable>
         </View>
 
+        <PrizeQuotaSection
+          awardedPrizeCounts={awardedPrizeCounts}
+          currentEventDay={currentEventDay}
+          dailyPrizeLimits={dailyPrizeLimits}
+          isSaving={isSavingPrizeQuota}
+          noticeMessage={prizeQuotaNoticeMessage}
+          noticeTone={prizeQuotaNoticeTone}
+          onAwardedCountAdjust={onAwardedCountAdjust}
+          onCurrentEventDayChange={onCurrentEventDayChange}
+          onDailyPrizeLimitComplete={onDailyPrizeLimitComplete}
+          prizeQuotaSummary={prizeQuotaSummary}
+        />
         <ProbabilityControlSection
           compact={compact}
           isSaving={isSavingProbability}
@@ -325,7 +409,15 @@ export function AdminScreen({
           onChange={onAppBlockChange}
         />
         <RecentLeadsSection compact={compact} isLoading={isLoading} recentLeads={recentLeads} />
-        <AdminActionsSection isExporting={isExporting} noticeMessage={noticeMessage} onExport={onExport} />
+        <AdminActionsSection
+          isClearingLeads={isClearingLeads}
+          isExporting={isExporting}
+          isResettingPrizes={isResettingPrizes}
+          noticeMessage={noticeMessage}
+          onClearLeads={onClearLeads}
+          onExport={onExport}
+          onResetPrizes={onResetPrizes}
+        />
       </LinearGradient>
     </View>
   );
@@ -359,16 +451,12 @@ const styles = StyleSheet.create({
     borderColor: BRAND_COLORS.stroke,
     gap: 12,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  headerColumn: {
+    flexDirection: 'column',
     gap: 16,
   },
-  headerRowCompact: {
-    flexDirection: 'column',
-  },
   headerCopy: {
-    flex: 1,
+    width: '100%',
   },
   kicker: {
     fontFamily: 'DMSans_700Bold',
@@ -403,25 +491,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  probabilityControlsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  probabilityControlsColumn: {
+    flexDirection: 'column',
     gap: 14,
   },
-  probabilityControlsRowCompact: {
-    flexDirection: 'column',
-  },
   probabilityMeterMain: {
-    flex: 1,
-    minWidth: 220,
+    width: '100%',
   },
   probabilityInputCard: {
-    minWidth: 190,
-    justifyContent: 'center',
-  },
-  probabilityInputCardCompact: {
-    minWidth: 0,
     width: '100%',
+    justifyContent: 'center',
   },
   probabilityValue: {
     fontFamily: 'LeagueSpartan_700Bold',
@@ -480,17 +559,13 @@ const styles = StyleSheet.create({
   probabilityStatusError: {
     color: '#b14141',
   },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  toggleColumn: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     gap: 16,
   },
-  toggleRowCompact: {
-    alignItems: 'flex-start',
-  },
   toggleCopy: {
-    flex: 1,
+    width: '100%',
   },
   toggleTitle: {
     fontFamily: 'DMSans_700Bold',
@@ -612,6 +687,28 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 12 },
     elevation: 10,
+  },
+  secondaryActionPressable: {
+    width: '100%',
+  },
+  secondaryActionPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
+  },
+  secondaryActionButton: {
+    minHeight: 62,
+    borderRadius: 22,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: '#fff2f2',
+    borderWidth: 1,
+    borderColor: '#eab7b7',
+  },
+  secondaryActionText: {
+    fontFamily: 'LeagueSpartan_700Bold',
+    fontSize: 19,
+    color: '#a23434',
+    textAlign: 'center',
   },
   actionButtonText: {
     fontFamily: 'LeagueSpartan_700Bold',

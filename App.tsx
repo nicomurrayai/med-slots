@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -39,6 +40,7 @@ import { ResultModal } from './src/components/ResultModal';
 import { SlotReel } from './src/components/SlotReel';
 import { MED_LOGO, SLOT_SYMBOLS } from './src/data/slotSymbols';
 import {
+  clearLeads,
   exportLeadsCsv,
   getRecentLeads,
   initDatabase,
@@ -47,7 +49,23 @@ import {
 import { loadSlotMachineConfig, saveSlotMachineConfig } from './src/services/slotConfigStorage';
 import { BRAND_COLORS, BRAND_GRADIENTS } from './src/theme/brand';
 import { LeadEntry } from './src/types/leads';
-import { GameStatus, ResultModalState, SlotMachineConfig, SlotSymbol, SpinResult } from './src/types/slot';
+import {
+  EventDay,
+  GameStatus,
+  ResultModalState,
+  SlotMachineConfig,
+  SlotSymbol,
+  SpinResult,
+} from './src/types/slot';
+import {
+  adjustAwardedPrizeCount,
+  clampNonNegativeInteger,
+  DEFAULT_AWARDED_PRIZE_COUNTS,
+  getEventDayLabel,
+  getPrizeQuotaSummary,
+  reservePrizeForCurrentDay,
+  validateDailyPrizeLimitChange,
+} from './src/utils/prizeQuota';
 import { createDefaultSlotMachineConfig } from './src/utils/slotConfig';
 
 const WIN_MESSAGE = 'Felicitaciones! Ganaste un premio sorpresa.';
@@ -87,18 +105,16 @@ function pickRandomSymbol(excludedIds: string[] = []) {
   return pool[Math.floor(Math.random() * pool.length)] ?? SLOT_SYMBOLS[0];
 }
 
-function createSpinResult(winProbabilityPercent: number): SpinResult {
-  const winProbability = clamp(winProbabilityPercent, 0, 100) / 100;
+function createWinningSpinResult(): SpinResult {
+  const winningSymbol = pickRandomSymbol();
 
-  if (Math.random() < winProbability) {
-    const winningSymbol = pickRandomSymbol();
+  return {
+    reels: [winningSymbol, winningSymbol, winningSymbol],
+    isWin: true,
+  };
+}
 
-    return {
-      reels: [winningSymbol, winningSymbol, winningSymbol],
-      isWin: true,
-    };
-  }
-
+function createLosingSpinResult(): SpinResult {
   const reels = [pickRandomSymbol(), pickRandomSymbol(), pickRandomSymbol()];
 
   while (reels[0].id === reels[1].id && reels[1].id === reels[2].id) {
@@ -108,6 +124,50 @@ function createSpinResult(winProbabilityPercent: number): SpinResult {
   return {
     reels,
     isWin: false,
+  };
+}
+
+function createSpinResult(winProbabilityPercent: number): SpinResult {
+  const winProbability = clamp(winProbabilityPercent, 0, 100) / 100;
+
+  return Math.random() < winProbability ? createWinningSpinResult() : createLosingSpinResult();
+}
+
+function getPrizeQuotaNoticeState(config: SlotMachineConfig): {
+  message: string;
+  tone: AdminConfigNoticeTone;
+} {
+  const summary = getPrizeQuotaSummary(config);
+
+  if (summary.isTotalExhausted) {
+    return {
+      message: 'Todos los premios del evento ya fueron entregados. La maquina sigue operativa, pero no dara mas premios.',
+      tone: 'error',
+    };
+  }
+
+  if (summary.isCurrentDayExhausted) {
+    return {
+      message: `${getEventDayLabel(summary.currentEventDay)} agotado. La maquina sigue operativa, pero ya no entrega premios hoy.`,
+      tone: 'error',
+    };
+  }
+
+  return {
+    message: `${getEventDayLabel(summary.currentEventDay)} activo. Quedan ${summary.currentDayRemaining} premios hoy.`,
+    tone: 'neutral',
+  };
+}
+
+function getSavedPrizeQuotaNoticeState(config: SlotMachineConfig, prefix: string): {
+  message: string;
+  tone: AdminConfigNoticeTone;
+} {
+  const idleState = getPrizeQuotaNoticeState(config);
+
+  return {
+    message: `${prefix} ${idleState.message}`,
+    tone: idleState.tone === 'error' ? 'error' : 'success',
   };
 }
 
@@ -296,6 +356,7 @@ function ArcadeBulb({ active, index, pulse, side, size }: ArcadeBulbProps) {
 
 export default function App() {
   const { width, height } = useWindowDimensions();
+  const initialPrizeQuotaNoticeState = getPrizeQuotaNoticeState(createDefaultSlotMachineConfig());
   const [assetsReady, setAssetsReady] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [storageError, setStorageError] = useState('');
@@ -321,13 +382,24 @@ export default function App() {
   const [adminConfigNoticeTone, setAdminConfigNoticeTone] = useState<AdminConfigNoticeTone>('neutral');
   const [isSavingSlotConfig, setIsSavingSlotConfig] = useState(false);
   const [isSavingAppBlock, setIsSavingAppBlock] = useState(false);
+  const [isSavingPrizeQuota, setIsSavingPrizeQuota] = useState(false);
   const [adminAppBlockNotice, setAdminAppBlockNotice] = useState('La app esta disponible para participar.');
+  const [prizeQuotaNotice, setPrizeQuotaNotice] = useState(initialPrizeQuotaNoticeState.message);
+  const [prizeQuotaNoticeTone, setPrizeQuotaNoticeTone] = useState<AdminConfigNoticeTone>(
+    initialPrizeQuotaNoticeState.tone,
+  );
   const [isExportingLeads, setIsExportingLeads] = useState(false);
+  const [isClearingLeads, setIsClearingLeads] = useState(false);
+  const [isResettingPrizes, setIsResettingPrizes] = useState(false);
+  const [isSpinPending, setIsSpinPending] = useState(false);
 
   const pendingResultRef = useRef<SpinResult | null>(null);
   const completedReelsRef = useRef(0);
   const secretLogoTapCountRef = useRef(0);
   const lastSecretLogoTapAtRef = useRef(0);
+  const slotConfigRef = useRef(slotConfig);
+  const configSaveLockRef = useRef(false);
+  const spinLockRef = useRef(false);
   const arcadePulse = useSharedValue(ARCADE_IDLE_GLOW);
 
   const [leagueLoaded, leagueError] = useLeagueSpartan({
@@ -386,6 +458,10 @@ export default function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    slotConfigRef.current = slotConfig;
+  }, [slotConfig]);
 
   useEffect(() => {
     let active = true;
@@ -498,6 +574,9 @@ export default function App() {
     (leagueLoaded || !!leagueError) &&
     (dmLoaded || !!dmError);
 
+  const prizeQuotaSummary = useMemo(() => getPrizeQuotaSummary(slotConfig), [slotConfig]);
+  const isMachineBusy = status === 'spinning' || isSpinPending;
+
   const layout = useMemo(() => {
     const pageWidth = Math.min(width, 1280);
     const compact = pageWidth < 900;
@@ -539,12 +618,34 @@ export default function App() {
     };
   }, [width]);
 
+  const saveLatestSlotConfig = async (mutate: (current: SlotMachineConfig) => SlotMachineConfig) => {
+    if (configSaveLockRef.current) {
+      throw new Error('CONFIG_SAVE_IN_PROGRESS');
+    }
+
+    configSaveLockRef.current = true;
+
+    try {
+      const nextConfig = mutate(slotConfigRef.current);
+      const savedConfig = await saveSlotMachineConfig(nextConfig);
+
+      slotConfigRef.current = savedConfig;
+      setSlotConfig(savedConfig);
+
+      return savedConfig;
+    } finally {
+      configSaveLockRef.current = false;
+    }
+  };
+
   const resetSlotState = () => {
     pendingResultRef.current = null;
     completedReelsRef.current = 0;
+    spinLockRef.current = false;
     setCurrentReels(INITIAL_REELS);
     setTargetReels(INITIAL_REELS);
     setSpinToken(0);
+    setIsSpinPending(false);
     setStatus('idle');
     setHasTriggeredConfetti(false);
     setResultModal(createDefaultResultModal());
@@ -564,11 +665,15 @@ export default function App() {
   };
 
   const openAdminScreen = async () => {
+    const prizeQuotaState = getPrizeQuotaNoticeState(slotConfigRef.current);
+
     setAdminNotice('');
     setAdminConfigNotice('Se aplica desde la siguiente jugada.');
     setAdminConfigNoticeTone('neutral');
+    setPrizeQuotaNotice(prizeQuotaState.message);
+    setPrizeQuotaNoticeTone(prizeQuotaState.tone);
     setAdminAppBlockNotice(
-      slotConfig.appBlocked
+      slotConfigRef.current.appBlocked
         ? 'La app esta bloqueada en este dispositivo.'
         : 'La app esta disponible para participar.',
     );
@@ -625,17 +730,22 @@ export default function App() {
   };
 
   const handleGoBackHome = () => {
+    const prizeQuotaState = getPrizeQuotaNoticeState(slotConfigRef.current);
+
     setEmailError('');
     setAdminNotice('');
     setAdminConfigNotice('Se aplica desde la siguiente jugada.');
     setAdminConfigNoticeTone('neutral');
+    setPrizeQuotaNotice(prizeQuotaState.message);
+    setPrizeQuotaNoticeTone(prizeQuotaState.tone);
     setCurrentStep('home');
   };
 
   const handleProbabilityComplete = async (value: number) => {
     const nextWinProbabilityPercent = Math.round(clamp(value, 0, 100));
+    const currentConfig = slotConfigRef.current;
 
-    if (nextWinProbabilityPercent === slotConfig.winProbabilityPercent) {
+    if (nextWinProbabilityPercent === currentConfig.winProbabilityPercent) {
       setAdminConfigNotice('Se aplica desde la siguiente jugada.');
       setAdminConfigNoticeTone('neutral');
       return;
@@ -643,13 +753,11 @@ export default function App() {
 
     try {
       setIsSavingSlotConfig(true);
-
-      const nextConfig = await saveSlotMachineConfig({
-        ...slotConfig,
+      const nextConfig = await saveLatestSlotConfig((activeConfig) => ({
+        ...activeConfig,
         winProbabilityPercent: nextWinProbabilityPercent,
-      });
+      }));
 
-      setSlotConfig(nextConfig);
       setAdminConfigNotice('Guardado en este dispositivo.');
       setAdminConfigNoticeTone('success');
     } catch {
@@ -661,19 +769,17 @@ export default function App() {
   };
 
   const handleAppBlockChange = async (value: boolean) => {
-    if (value === slotConfig.appBlocked) {
+    if (value === slotConfigRef.current.appBlocked) {
       return;
     }
 
     try {
       setIsSavingAppBlock(true);
-
-      const nextConfig = await saveSlotMachineConfig({
-        ...slotConfig,
+      await saveLatestSlotConfig((activeConfig) => ({
+        ...activeConfig,
         appBlocked: value,
-      });
+      }));
 
-      setSlotConfig(nextConfig);
       setAdminAppBlockNotice(
         value ? 'Bloqueo activado en este dispositivo.' : 'Bloqueo desactivado. La app vuelve a estar abierta.',
       );
@@ -681,6 +787,101 @@ export default function App() {
       setAdminAppBlockNotice('No pudimos guardar el bloqueo de la app.');
     } finally {
       setIsSavingAppBlock(false);
+    }
+  };
+
+  const handleCurrentEventDayChange = async (day: EventDay) => {
+    if (day === slotConfigRef.current.currentEventDay) {
+      const prizeQuotaState = getPrizeQuotaNoticeState(slotConfigRef.current);
+      setPrizeQuotaNotice(prizeQuotaState.message);
+      setPrizeQuotaNoticeTone(prizeQuotaState.tone);
+      return;
+    }
+
+    try {
+      setIsSavingPrizeQuota(true);
+
+      const nextConfig = await saveLatestSlotConfig((activeConfig) => ({
+        ...activeConfig,
+        currentEventDay: day,
+      }));
+      const nextNoticeState = getSavedPrizeQuotaNoticeState(nextConfig, `${getEventDayLabel(day)} activado.`);
+
+      setPrizeQuotaNotice(nextNoticeState.message);
+      setPrizeQuotaNoticeTone(nextNoticeState.tone);
+    } catch {
+      setPrizeQuotaNotice('No pudimos cambiar el dia activo en este dispositivo.');
+      setPrizeQuotaNoticeTone('error');
+    } finally {
+      setIsSavingPrizeQuota(false);
+    }
+  };
+
+  const handleDailyPrizeLimitComplete = async (day: EventDay, value: number) => {
+    const normalizedLimit = clampNonNegativeInteger(value);
+    const currentConfig = slotConfigRef.current;
+
+    if (normalizedLimit === currentConfig.dailyPrizeLimits[day]) {
+      const prizeQuotaState = getPrizeQuotaNoticeState(currentConfig);
+      setPrizeQuotaNotice(prizeQuotaState.message);
+      setPrizeQuotaNoticeTone(prizeQuotaState.tone);
+      return;
+    }
+
+    const validationError = validateDailyPrizeLimitChange(currentConfig, day, normalizedLimit);
+
+    if (validationError) {
+      setPrizeQuotaNotice(validationError);
+      setPrizeQuotaNoticeTone('error');
+      return;
+    }
+
+    try {
+      setIsSavingPrizeQuota(true);
+
+      const nextConfig = await saveLatestSlotConfig((activeConfig) => ({
+        ...activeConfig,
+        dailyPrizeLimits: {
+          ...activeConfig.dailyPrizeLimits,
+          [day]: normalizedLimit,
+        },
+      }));
+      const nextNoticeState = getSavedPrizeQuotaNoticeState(nextConfig, `${getEventDayLabel(day)} guardado.`);
+
+      setPrizeQuotaNotice(nextNoticeState.message);
+      setPrizeQuotaNoticeTone(nextNoticeState.tone);
+    } catch {
+      setPrizeQuotaNotice('No pudimos guardar el cupo diario en este dispositivo.');
+      setPrizeQuotaNoticeTone('error');
+    } finally {
+      setIsSavingPrizeQuota(false);
+    }
+  };
+
+  const handleAwardedPrizeCountAdjust = async (delta: -1 | 1) => {
+    const currentConfig = slotConfigRef.current;
+    const day = currentConfig.currentEventDay;
+    const draftConfig = adjustAwardedPrizeCount(currentConfig, day, delta);
+
+    if (draftConfig === currentConfig) {
+      return;
+    }
+
+    try {
+      setIsSavingPrizeQuota(true);
+
+      const nextConfig = await saveLatestSlotConfig((activeConfig) =>
+        adjustAwardedPrizeCount(activeConfig, activeConfig.currentEventDay, delta),
+      );
+      const nextNoticeState = getSavedPrizeQuotaNoticeState(nextConfig, `Conteo de ${getEventDayLabel(day)} actualizado.`);
+
+      setPrizeQuotaNotice(nextNoticeState.message);
+      setPrizeQuotaNoticeTone(nextNoticeState.tone);
+    } catch {
+      setPrizeQuotaNotice('No pudimos actualizar el conteo de premios en este dispositivo.');
+      setPrizeQuotaNoticeTone('error');
+    } finally {
+      setIsSavingPrizeQuota(false);
     }
   };
 
@@ -701,7 +902,7 @@ export default function App() {
   };
 
   const handleExportLeads = async () => {
-    if (isExportingLeads) {
+    if (isExportingLeads || isClearingLeads || isResettingPrizes) {
       return;
     }
 
@@ -731,20 +932,187 @@ export default function App() {
     }
   };
 
-  const handleSpin = () => {
-    if (currentStep !== 'slot' || !isSpinPrimed || status === 'spinning') {
+  const handleSpin = async () => {
+    if (currentStep !== 'slot' || !isSpinPrimed || isMachineBusy || spinLockRef.current) {
       return;
     }
 
-    const result = createSpinResult(slotConfig.winProbabilityPercent);
-    pendingResultRef.current = result;
-    completedReelsRef.current = 0;
+    spinLockRef.current = true;
+    setIsSpinPending(true);
+    let didStartSpin = false;
 
-    setTargetReels(result.reels);
-    setResultModal((prev) => ({ ...prev, isOpen: false }));
-    setStatus('spinning');
-    setHasTriggeredConfetti(false);
-    setSpinToken((value) => value + 1);
+    try {
+      let result = createSpinResult(slotConfigRef.current.winProbabilityPercent);
+
+      if (result.isWin) {
+        try {
+          const nextConfig = await saveLatestSlotConfig((activeConfig) => {
+            const reservedConfig = reservePrizeForCurrentDay(activeConfig);
+
+            if (!reservedConfig) {
+              throw new Error('PRIZE_QUOTA_EXHAUSTED');
+            }
+
+            return reservedConfig;
+          });
+          const nextNoticeState = getSavedPrizeQuotaNoticeState(nextConfig, 'Premio reservado.');
+
+          setPrizeQuotaNotice(nextNoticeState.message);
+          setPrizeQuotaNoticeTone(nextNoticeState.tone);
+        } catch (error) {
+          const errorCode = error instanceof Error ? error.message : '';
+
+          if (errorCode === 'PRIZE_QUOTA_EXHAUSTED') {
+            const prizeQuotaState = getPrizeQuotaNoticeState(slotConfigRef.current);
+
+            setPrizeQuotaNotice(prizeQuotaState.message);
+            setPrizeQuotaNoticeTone(prizeQuotaState.tone);
+          } else if (errorCode === 'CONFIG_SAVE_IN_PROGRESS') {
+            setPrizeQuotaNotice(
+              'Todavia estamos guardando un ajuste local. Esta jugada queda sin premio para evitar duplicados.',
+            );
+            setPrizeQuotaNoticeTone('error');
+          } else {
+            setPrizeQuotaNotice(
+              'No pudimos reservar el premio en este dispositivo. Esta jugada queda sin premio para evitar inconsistencias.',
+            );
+            setPrizeQuotaNoticeTone('error');
+          }
+
+          result = createLosingSpinResult();
+        }
+      }
+
+      pendingResultRef.current = result;
+      completedReelsRef.current = 0;
+
+      setTargetReels(result.reels);
+      setResultModal((prev) => ({ ...prev, isOpen: false }));
+      setStatus('spinning');
+      setHasTriggeredConfetti(false);
+      setSpinToken((value) => value + 1);
+      didStartSpin = true;
+    } finally {
+      if (!didStartSpin) {
+        spinLockRef.current = false;
+      }
+
+      setIsSpinPending(false);
+    }
+  };
+
+  const confirmLeadReset = () =>
+    new Promise<boolean>((resolve) => {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        resolve(window.confirm('Esto borrara todos los mails guardados en este dispositivo. Quieres continuar?'));
+        return;
+      }
+
+      Alert.alert(
+        'Borrar registros',
+        'Esto borrara todos los mails guardados en este dispositivo. Esta accion no se puede deshacer.',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+            onPress: () => resolve(false),
+          },
+          {
+            text: 'Borrar',
+            style: 'destructive',
+            onPress: () => resolve(true),
+          },
+        ],
+        {
+          cancelable: true,
+          onDismiss: () => resolve(false),
+        },
+      );
+    });
+
+  const handleClearLeads = async () => {
+    if (isClearingLeads || isExportingLeads || isResettingPrizes) {
+      return;
+    }
+
+    const shouldClear = await confirmLeadReset();
+
+    if (!shouldClear) {
+      return;
+    }
+
+    setAdminNotice('');
+    setIsClearingLeads(true);
+
+    try {
+      await clearLeads();
+      setAdminRecentLeads([]);
+      setAdminNotice('Todos los mails fueron borrados de este dispositivo.');
+    } catch {
+      setAdminNotice('No pudimos borrar los mails guardados en este dispositivo.');
+    } finally {
+      setIsClearingLeads(false);
+    }
+  };
+
+  const confirmPrizeReset = () =>
+    new Promise<boolean>((resolve) => {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        resolve(window.confirm('Esto reiniciara a 0 los premios entregados en este dispositivo. Quieres continuar?'));
+        return;
+      }
+
+      Alert.alert(
+        'Resetear premios',
+        'Esto reiniciara a 0 los premios entregados en este dispositivo. Esta accion no se puede deshacer.',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+            onPress: () => resolve(false),
+          },
+          {
+            text: 'Resetear',
+            style: 'destructive',
+            onPress: () => resolve(true),
+          },
+        ],
+        {
+          cancelable: true,
+          onDismiss: () => resolve(false),
+        },
+      );
+    });
+
+  const handleResetPrizeCounts = async () => {
+    if (isResettingPrizes || isClearingLeads || isExportingLeads) {
+      return;
+    }
+
+    const shouldReset = await confirmPrizeReset();
+
+    if (!shouldReset) {
+      return;
+    }
+
+    setAdminNotice('');
+    setIsResettingPrizes(true);
+
+    try {
+      const nextConfig = await saveLatestSlotConfig((activeConfig) => ({
+        ...activeConfig,
+        awardedPrizeCounts: { ...DEFAULT_AWARDED_PRIZE_COUNTS },
+      }));
+      const nextNoticeState = getSavedPrizeQuotaNoticeState(nextConfig, 'Premios entregados reiniciados.');
+
+      setPrizeQuotaNotice(nextNoticeState.message);
+      setPrizeQuotaNoticeTone(nextNoticeState.tone);
+      setAdminNotice('Los premios entregados volvieron a 0 en este dispositivo.');
+    } catch {
+      setAdminNotice('No pudimos reiniciar el conteo de premios en este dispositivo.');
+    } finally {
+      setIsResettingPrizes(false);
+    }
   };
 
   const handleReelComplete = () => {
@@ -782,7 +1150,7 @@ export default function App() {
 
   const statusCopy =
     status === 'spinning'
-      ? 'Tus equipos ya estan girando.'
+      ? ''
       : '';
   const machineDepthX = layout.compact ? 10 : 22;
   const machineDepthY = layout.compact ? 14 : 24;
@@ -876,18 +1244,32 @@ export default function App() {
         {currentStep === 'admin' ? (
           <AdminScreen
             appBlocked={slotConfig.appBlocked}
+            awardedPrizeCounts={slotConfig.awardedPrizeCounts}
             compact={layout.compact}
+            currentEventDay={slotConfig.currentEventDay}
+            dailyPrizeLimits={slotConfig.dailyPrizeLimits}
+            isClearingLeads={isClearingLeads}
             isExporting={isExportingLeads}
             isLoading={adminLoading}
             isSavingAppBlock={isSavingAppBlock}
+            isSavingPrizeQuota={isSavingPrizeQuota}
             isSavingProbability={isSavingSlotConfig}
+            isResettingPrizes={isResettingPrizes}
             lockNoticeMessage={adminAppBlockNotice}
             noticeMessage={adminNotice}
+            onAwardedCountAdjust={handleAwardedPrizeCountAdjust}
             onAppBlockChange={handleAppBlockChange}
             onBack={handleGoBackHome}
+            onCurrentEventDayChange={handleCurrentEventDayChange}
+            onDailyPrizeLimitComplete={handleDailyPrizeLimitComplete}
+            onClearLeads={handleClearLeads}
             onExport={handleExportLeads}
             onProbabilityComplete={handleProbabilityComplete}
+            onResetPrizes={handleResetPrizeCounts}
             panelWidth={layout.emailPanelWidth}
+            prizeQuotaNoticeMessage={prizeQuotaNotice}
+            prizeQuotaNoticeTone={prizeQuotaNoticeTone}
+            prizeQuotaSummary={prizeQuotaSummary}
             probabilityNoticeMessage={adminConfigNotice}
             probabilityNoticeTone={adminConfigNoticeTone}
             recentLeads={adminRecentLeads}
@@ -1051,8 +1433,10 @@ export default function App() {
 
                 <LeverButton
                   compact={layout.compact}
-                  disabled={!isSpinPrimed || status === 'spinning'}
-                  onPress={handleSpin}
+                  disabled={!isSpinPrimed || isMachineBusy}
+                  onPress={() => {
+                    void handleSpin();
+                  }}
                   spinToken={spinToken}
                 />
               </View>

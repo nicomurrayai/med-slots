@@ -97,6 +97,12 @@ export async function getLeadCount() {
   return result?.total ?? 0;
 }
 
+export async function clearLeads() {
+  const db = await getDatabase();
+
+  await db.runAsync(`DELETE FROM ${LEADS_TABLE}`);
+}
+
 export async function getRecentLeads(limit: number) {
   const db = await getDatabase();
   const resolvedLimit = Math.max(1, Math.min(100, Math.floor(limit)));

@@ -77,6 +77,10 @@ export async function getLeadCount() {
   return readStoredLeads().length;
 }
 
+export async function clearLeads() {
+  writeStoredLeads([]);
+}
+
 export async function getRecentLeads(limit: number) {
   const resolvedLimit = Math.max(1, Math.min(100, Math.floor(limit)));
 
