@@ -1,7 +1,7 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { BrandSurface } from './BrandSurface';
 import { PrizeQuotaSection } from './PrizeQuotaSection';
 import { LeadEntry } from '../types/leads';
 import { EventDay, PrizeDayValues, PrizeQuotaSummary } from '../types/slot';
@@ -21,6 +21,7 @@ type AdminScreenProps = {
   isSavingAppBlock: boolean;
   isSavingPrizeQuota: boolean;
   isSavingProbability: boolean;
+  legacyVisualMode?: boolean;
   lockNoticeMessage: string;
   noticeMessage: string;
   onAwardedCountAdjust: (delta: -1 | 1) => void;
@@ -44,12 +45,13 @@ type AdminScreenProps = {
 
 type SectionCardProps = {
   children: React.ReactNode;
+  legacyVisualMode?: boolean;
   title: string;
 };
 
-function SectionCard({ children, title }: SectionCardProps) {
+function SectionCard({ children, legacyVisualMode = false, title }: SectionCardProps) {
   return (
-    <View style={styles.sectionCard}>
+    <View style={[styles.sectionCard, legacyVisualMode && styles.sectionCardLegacy]}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {children}
     </View>
@@ -63,6 +65,7 @@ function clampPercent(value: number) {
 function ProbabilityControlSection({
   compact,
   isSaving,
+  legacyVisualMode,
   noticeMessage,
   noticeTone,
   onComplete,
@@ -70,6 +73,7 @@ function ProbabilityControlSection({
 }: {
   compact: boolean;
   isSaving: boolean;
+  legacyVisualMode: boolean;
   noticeMessage: string;
   noticeTone: 'neutral' | 'success' | 'error';
   onComplete: (value: number) => void;
@@ -125,7 +129,7 @@ function ProbabilityControlSection({
   const displayNoticeTone = isDirty ? 'neutral' : noticeTone;
 
   return (
-    <SectionCard title="Probabilidad">
+    <SectionCard legacyVisualMode={legacyVisualMode} title="Probabilidad">
       <Text style={styles.probabilityCopy}>Define el % de premio que la maquina intentara dar.</Text>
 
       <View style={styles.probabilityControlsColumn}>
@@ -181,17 +185,19 @@ function AppBlockSection({
   compact,
   appBlocked,
   isSaving,
+  legacyVisualMode,
   noticeMessage,
   onChange,
 }: {
   compact: boolean;
   appBlocked: boolean;
   isSaving: boolean;
+  legacyVisualMode: boolean;
   noticeMessage: string;
   onChange: (value: boolean) => void;
 }) {
   return (
-    <SectionCard title="Acceso">
+    <SectionCard legacyVisualMode={legacyVisualMode} title="Acceso">
       <View style={styles.toggleColumn}>
         <View style={styles.toggleCopy}>
           <Text style={styles.toggleTitle}>App bloqueada</Text>
@@ -215,14 +221,16 @@ function AppBlockSection({
 function RecentLeadsSection({
   compact,
   isLoading,
+  legacyVisualMode,
   recentLeads,
 }: {
   compact: boolean;
   isLoading: boolean;
+  legacyVisualMode: boolean;
   recentLeads: LeadEntry[];
 }) {
   return (
-    <SectionCard title="Registros">
+    <SectionCard legacyVisualMode={legacyVisualMode} title="Registros">
       {isLoading ? (
         <View style={styles.loadingState}>
           <ActivityIndicator color={BRAND_COLORS.primary} size="small" />
@@ -259,6 +267,7 @@ function AdminActionsSection({
   isClearingLeads,
   isExporting,
   isResettingPrizes,
+  legacyVisualMode,
   noticeMessage,
   onClearLeads,
   onExport,
@@ -267,6 +276,7 @@ function AdminActionsSection({
   isClearingLeads: boolean;
   isExporting: boolean;
   isResettingPrizes: boolean;
+  legacyVisualMode: boolean;
   noticeMessage: string;
   onClearLeads: () => void;
   onExport: () => void;
@@ -275,7 +285,7 @@ function AdminActionsSection({
   const isBusy = isExporting || isClearingLeads || isResettingPrizes;
 
   return (
-    <SectionCard title="Datos">
+    <SectionCard legacyVisualMode={legacyVisualMode} title="Datos">
       <Pressable
         accessibilityRole="button"
         disabled={isBusy}
@@ -286,9 +296,13 @@ function AdminActionsSection({
           isBusy && styles.actionButtonDisabled,
         ]}
       >
-        <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={styles.actionButton}>
+        <BrandSurface
+          colors={BRAND_GRADIENTS.primaryButton}
+          enabled={!legacyVisualMode}
+          style={[styles.actionButton, legacyVisualMode && styles.actionButtonLegacy]}
+        >
           <Text style={styles.actionButtonText}>{isExporting ? 'EXPORTANDO...' : 'EXPORTAR CSV'}</Text>
-        </LinearGradient>
+        </BrandSurface>
       </Pressable>
 
       <Pressable
@@ -341,6 +355,7 @@ export function AdminScreen({
   isSavingAppBlock,
   isSavingPrizeQuota,
   isSavingProbability,
+  legacyVisualMode = false,
   lockNoticeMessage,
   noticeMessage,
   onAwardedCountAdjust,
@@ -363,9 +378,13 @@ export function AdminScreen({
 }: AdminScreenProps) {
   return (
     <View style={styles.stage}>
-      <View style={[styles.cardShadow, { maxWidth: panelWidth }]} />
+      {!legacyVisualMode ? <View style={[styles.cardShadow, { maxWidth: panelWidth }]} /> : null}
 
-      <LinearGradient colors={BRAND_GRADIENTS.card} style={[styles.card, { maxWidth: panelWidth }]}>
+      <BrandSurface
+        colors={BRAND_GRADIENTS.card}
+        enabled={!legacyVisualMode}
+        style={[styles.card, legacyVisualMode && styles.cardLegacy, { maxWidth: panelWidth }]}
+      >
         <View style={styles.headerColumn}>
           <View style={styles.headerCopy}>
             <Text style={styles.kicker}>PANEL OCULTO</Text>
@@ -396,6 +415,7 @@ export function AdminScreen({
         <ProbabilityControlSection
           compact={compact}
           isSaving={isSavingProbability}
+          legacyVisualMode={legacyVisualMode}
           noticeMessage={probabilityNoticeMessage}
           noticeTone={probabilityNoticeTone}
           onComplete={onProbabilityComplete}
@@ -405,20 +425,27 @@ export function AdminScreen({
           compact={compact}
           appBlocked={appBlocked}
           isSaving={isSavingAppBlock}
+          legacyVisualMode={legacyVisualMode}
           noticeMessage={lockNoticeMessage}
           onChange={onAppBlockChange}
         />
-        <RecentLeadsSection compact={compact} isLoading={isLoading} recentLeads={recentLeads} />
+        <RecentLeadsSection
+          compact={compact}
+          isLoading={isLoading}
+          legacyVisualMode={legacyVisualMode}
+          recentLeads={recentLeads}
+        />
         <AdminActionsSection
           isClearingLeads={isClearingLeads}
           isExporting={isExporting}
           isResettingPrizes={isResettingPrizes}
+          legacyVisualMode={legacyVisualMode}
           noticeMessage={noticeMessage}
           onClearLeads={onClearLeads}
           onExport={onExport}
           onResetPrizes={onResetPrizes}
         />
-      </LinearGradient>
+      </BrandSurface>
     </View>
   );
 }
@@ -450,6 +477,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BRAND_COLORS.stroke,
     gap: 12,
+  },
+  cardLegacy: {
+    backgroundColor: BRAND_COLORS.surface,
+    borderColor: '#c4d9f6',
   },
   headerColumn: {
     flexDirection: 'column',
@@ -603,6 +634,10 @@ const styles = StyleSheet.create({
     borderColor: BRAND_COLORS.stroke,
     gap: 10,
   },
+  sectionCardLegacy: {
+    backgroundColor: BRAND_COLORS.surfaceSoft,
+    borderColor: '#d3e4fb',
+  },
   sectionTitle: {
     fontFamily: 'LeagueSpartan_700Bold',
     fontSize: 19,
@@ -687,6 +722,15 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 12 },
     elevation: 10,
+  },
+  actionButtonLegacy: {
+    backgroundColor: BRAND_COLORS.primary,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.primaryStrong,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   secondaryActionPressable: {
     width: '100%',

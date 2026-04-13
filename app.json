@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./public/logo.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./public/logo.png",
       "resizeMode": "contain",
@@ -33,7 +33,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "0a9fc1ce-40da-4c10-bd65-4dda6ba3d31f"
+        "projectId": "ad2bf0e1-48d8-4a91-9073-aacc4fbc4cea"
       }
     }
   }

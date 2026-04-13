@@ -6,13 +6,13 @@ import {
   useFonts as useLeagueSpartan,
 } from '@expo-google-fonts/league-spartan';
 import * as Sharing from 'expo-sharing';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -33,6 +33,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AdminScreen } from './src/components/AdminScreen';
+import { BrandSurface } from './src/components/BrandSurface';
 import { CelebrationConfetti } from './src/components/CelebrationConfetti';
 import { EmailCaptureScreen } from './src/components/EmailCaptureScreen';
 import { IntroHomeScreen } from './src/components/IntroHomeScreen';
@@ -178,11 +179,12 @@ function isValidEmail(value: string) {
 type LeverButtonProps = {
   compact: boolean;
   disabled: boolean;
+  legacyVisualMode: boolean;
   onPress: () => void;
   spinToken: number;
 };
 
-function LeverButton({ compact, disabled, onPress, spinToken }: LeverButtonProps) {
+function LeverButton({ compact, disabled, legacyVisualMode, onPress, spinToken }: LeverButtonProps) {
   const pullProgress = useSharedValue(0);
 
   useEffect(() => {
@@ -242,31 +244,38 @@ function LeverButton({ compact, disabled, onPress, spinToken }: LeverButtonProps
         ]}
       >
         <View style={styles.leverBase}>
-          <LinearGradient
+          <BrandSurface
             colors={BRAND_GRADIENTS.leverMount}
+            enabled={!legacyVisualMode}
             end={{ x: 0, y: 1 }}
             start={{ x: 0, y: 0 }}
-            style={styles.leverMount}
+            style={[styles.leverMount, legacyVisualMode && styles.leverMountLegacy]}
           />
 
           <Animated.View style={[styles.leverPivot, leverPivotStyle]}>
-            <LinearGradient
+            <BrandSurface
               colors={BRAND_GRADIENTS.metallic}
+              enabled={!legacyVisualMode}
               end={{ x: 1, y: 0 }}
               start={{ x: 0, y: 0 }}
-              style={styles.leverRod}
+              style={[styles.leverRod, legacyVisualMode && styles.leverRodLegacy]}
             />
-            <View style={styles.leverKnob}>
-              <LinearGradient colors={BRAND_GRADIENTS.leverKnob} style={styles.leverKnobCore} />
-              <View style={styles.leverKnobHighlight} />
+            <View style={[styles.leverKnob, legacyVisualMode && styles.leverKnobLegacy]}>
+              <BrandSurface
+                colors={BRAND_GRADIENTS.leverKnob}
+                enabled={!legacyVisualMode}
+                style={[styles.leverKnobCore, legacyVisualMode && styles.leverKnobCoreLegacy]}
+              />
+              <View style={[styles.leverKnobHighlight, legacyVisualMode && styles.leverKnobHighlightLegacy]} />
             </View>
           </Animated.View>
 
-          <LinearGradient
+          <BrandSurface
             colors={BRAND_GRADIENTS.socket}
+            enabled={!legacyVisualMode}
             end={{ x: 1, y: 1 }}
             start={{ x: 0.1, y: 0.1 }}
-            style={styles.leverSocket}
+            style={[styles.leverSocket, legacyVisualMode && styles.leverSocketLegacy]}
           />
         </View>
       </Pressable>
@@ -277,12 +286,13 @@ function LeverButton({ compact, disabled, onPress, spinToken }: LeverButtonProps
 type ArcadeBulbProps = {
   active: boolean;
   index: number;
+  legacyVisualMode: boolean;
   pulse: { value: number };
   side: 'left' | 'right';
   size: number;
 };
 
-function ArcadeBulb({ active, index, pulse, side, size }: ArcadeBulbProps) {
+function ArcadeBulb({ active, index, legacyVisualMode, pulse, side, size }: ArcadeBulbProps) {
   const phase =
     (side === 'left' ? index : ARCADE_LIGHTS.length - 1 - index) * ARCADE_LIGHT_PHASE_STEP +
     (side === 'right' ? Math.PI / 2.8 : 0);
@@ -316,6 +326,32 @@ function ArcadeBulb({ active, index, pulse, side, size }: ArcadeBulbProps) {
       transform: [{ scale: 1 + intensity * 0.5 }],
     };
   }, [active, phase]);
+
+  if (legacyVisualMode) {
+    return (
+      <View
+        style={[
+          styles.arcadeBulbSlot,
+          {
+            height: size + 12,
+            width: size + 12,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.arcadeBulb,
+            styles.arcadeBulbLegacy,
+            {
+              borderRadius: size / 2,
+              height: size,
+              width: size,
+            },
+          ]}
+        />
+      </View>
+    );
+  }
 
   return (
     <View
@@ -356,6 +392,14 @@ function ArcadeBulb({ active, index, pulse, side, size }: ArcadeBulbProps) {
 
 export default function App() {
   const { width, height } = useWindowDimensions();
+  const androidApiLevel =
+    Platform.OS === 'android'
+      ? typeof Platform.Version === 'number'
+        ? Platform.Version
+        : Number.parseInt(String(Platform.Version), 10)
+      : null;
+  const legacyVisualMode =
+    Platform.OS === 'android' && (Platform.isTV || (androidApiLevel !== null && androidApiLevel <= 28));
   const initialPrizeQuotaNoticeState = getPrizeQuotaNoticeState(createDefaultSlotMachineConfig());
   const [assetsReady, setAssetsReady] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -1158,8 +1202,13 @@ export default function App() {
 
   if (storageError) {
     return (
-      <LinearGradient colors={BRAND_GRADIENTS.page} style={styles.loadingScreen}>
-        <View style={styles.loadingCard}>
+      <View style={[styles.loadingScreen, legacyVisualMode && styles.loadingScreenLegacy]}>
+        <BrandSurface
+          colors={BRAND_GRADIENTS.page}
+          enabled={!legacyVisualMode}
+          style={[StyleSheet.absoluteFillObject, legacyVisualMode && styles.pageBackdropLegacy]}
+        />
+        <View style={[styles.loadingCard, legacyVisualMode && styles.loadingCardLegacy]}>
           <Image source={MED_LOGO} resizeMode="contain" style={styles.loadingLogo} />
           <Text style={styles.loadingTitle}>No pudimos iniciar la base local</Text>
           <Text style={styles.loadingBody}>
@@ -1171,36 +1220,49 @@ export default function App() {
             onPress={() => setStorageRetryToken((value) => value + 1)}
             style={({ pressed }) => [styles.retryPressable, pressed && styles.retryPressed]}
           >
-            <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={styles.retryButton}>
+            <BrandSurface
+              colors={BRAND_GRADIENTS.primaryButton}
+              enabled={!legacyVisualMode}
+              style={[styles.retryButton, legacyVisualMode && styles.retryButtonLegacy]}
+            >
               <Text style={styles.retryButtonText}>REINTENTAR</Text>
-            </LinearGradient>
+            </BrandSurface>
           </Pressable>
         </View>
         <StatusBar style="dark" />
-      </LinearGradient>
+      </View>
     );
   }
 
   if (!ready) {
     return (
-      <LinearGradient colors={BRAND_GRADIENTS.page} style={styles.loadingScreen}>
-        <View style={styles.loadingCard}>
+      <View style={[styles.loadingScreen, legacyVisualMode && styles.loadingScreenLegacy]}>
+        <BrandSurface
+          colors={BRAND_GRADIENTS.page}
+          enabled={!legacyVisualMode}
+          style={[StyleSheet.absoluteFillObject, legacyVisualMode && styles.pageBackdropLegacy]}
+        />
+        <View style={[styles.loadingCard, legacyVisualMode && styles.loadingCardLegacy]}>
           <Image source={MED_LOGO} resizeMode="contain" style={styles.loadingLogo} />
           <ActivityIndicator color={BRAND_COLORS.primary} size="large" />
           <Text style={styles.loadingTitle}>Preparando la maquina MED...</Text>
           <Text style={styles.loadingBody}>Cargando branding, premios, ajustes y animaciones.</Text>
         </View>
         <StatusBar style="dark" />
-      </LinearGradient>
+      </View>
     );
   }
 
   return (
     <View style={styles.page}>
-      <LinearGradient colors={BRAND_GRADIENTS.page} style={StyleSheet.absoluteFillObject} />
-      <View style={[styles.backgroundBloom, styles.backgroundBloomPrimary]} />
-      <View style={[styles.backgroundBloom, styles.backgroundBloomSecondary]} />
-      <View style={[styles.backgroundBloom, styles.backgroundBloomTertiary]} />
+      <BrandSurface
+        colors={BRAND_GRADIENTS.page}
+        enabled={!legacyVisualMode}
+        style={[StyleSheet.absoluteFillObject, legacyVisualMode && styles.pageBackdropLegacy]}
+      />
+      {!legacyVisualMode ? <View style={[styles.backgroundBloom, styles.backgroundBloomPrimary]} /> : null}
+      {!legacyVisualMode ? <View style={[styles.backgroundBloom, styles.backgroundBloomSecondary]} /> : null}
+      {!legacyVisualMode ? <View style={[styles.backgroundBloom, styles.backgroundBloomTertiary]} /> : null}
 
       <ScrollView
         bounces={false}
@@ -1218,6 +1280,7 @@ export default function App() {
           <IntroHomeScreen
             compact={layout.compact}
             isAppBlocked={slotConfig.appBlocked}
+            legacyVisualMode={legacyVisualMode}
             lockedMessage="Acercate mas tarde para participar."
             logoSize={layout.logoSize}
             onContinue={handleOpenLeadCapture}
@@ -1233,6 +1296,7 @@ export default function App() {
             disabled={isSavingLead}
             email={capturedEmail}
             errorMessage={emailError}
+            legacyVisualMode={legacyVisualMode}
             onBack={handleGoBackHome}
             onChangeEmail={handleEmailChange}
             onSubmit={handleEmailSubmit}
@@ -1255,6 +1319,7 @@ export default function App() {
             isSavingPrizeQuota={isSavingPrizeQuota}
             isSavingProbability={isSavingSlotConfig}
             isResettingPrizes={isResettingPrizes}
+            legacyVisualMode={legacyVisualMode}
             lockNoticeMessage={adminAppBlockNotice}
             noticeMessage={adminNotice}
             onAwardedCountAdjust={handleAwardedPrizeCountAdjust}
@@ -1307,25 +1372,29 @@ export default function App() {
                       width: layout.frameWidth + machineDepthX,
                     },
                   ]}
-                >
-                  <View
-                    style={[
-                      styles.machineDepthShadow,
-                      {
-                        bottom: 4,
-                        left: machineDepthX + 12,
-                        right: 10,
-                        top: machineDepthY + 26,
-                      },
-                    ]}
-                  />
+                  >
+                  {!legacyVisualMode ? (
+                    <View
+                      style={[
+                        styles.machineDepthShadow,
+                        {
+                          bottom: 4,
+                          left: machineDepthX + 12,
+                          right: 10,
+                          top: machineDepthY + 26,
+                        },
+                      ]}
+                    />
+                  ) : null}
 
-                  <LinearGradient
+                  <BrandSurface
                     colors={BRAND_GRADIENTS.machineDepth}
+                    enabled={!legacyVisualMode}
                     end={{ x: 1, y: 1 }}
                     start={{ x: 0, y: 0 }}
                     style={[
                       styles.machineDepthPlate,
+                      legacyVisualMode && styles.machineDepthPlateLegacy,
                       {
                         borderRadius: layout.machineRadius + 8,
                         bottom: 0,
@@ -1336,12 +1405,14 @@ export default function App() {
                     ]}
                   />
 
-                  <LinearGradient
+                  <BrandSurface
                     colors={BRAND_GRADIENTS.machineShell}
+                    enabled={!legacyVisualMode}
                     end={{ x: 1, y: 1 }}
                     start={{ x: 0, y: 0 }}
                     style={[
                       styles.machineShell,
+                      legacyVisualMode && styles.machineShellLegacy,
                       {
                         borderRadius: layout.machineRadius,
                         paddingHorizontal: layout.machineShellHorizontalPadding,
@@ -1350,10 +1421,12 @@ export default function App() {
                       },
                     ]}
                   >
-                    <LinearGradient
-                      colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.05)', 'transparent']}
-                      style={styles.machineGlossTop}
-                    />
+                    {!legacyVisualMode ? (
+                      <BrandSurface
+                        colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.05)', 'transparent']}
+                        style={styles.machineGlossTop}
+                      />
+                    ) : null}
 
                     <View style={[styles.machineEdgeStrip, styles.machineEdgeStripLeft]}>
                       {ARCADE_LIGHTS.map((light) => (
@@ -1361,6 +1434,7 @@ export default function App() {
                           active={status === 'spinning'}
                           index={light}
                           key={`left-light-${light}`}
+                          legacyVisualMode={legacyVisualMode}
                           pulse={arcadePulse}
                           side="left"
                           size={sideLightSize}
@@ -1374,6 +1448,7 @@ export default function App() {
                           active={status === 'spinning'}
                           index={light}
                           key={`right-light-${light}`}
+                          legacyVisualMode={legacyVisualMode}
                           pulse={arcadePulse}
                           side="right"
                           size={sideLightSize}
@@ -1381,10 +1456,12 @@ export default function App() {
                       ))}
                     </View>
 
-                    <LinearGradient
+                    <BrandSurface
                       colors={BRAND_GRADIENTS.machineCore}
+                      enabled={!legacyVisualMode}
                       style={[
                         styles.machineCore,
+                        legacyVisualMode && styles.machineCoreLegacy,
                         {
                           borderRadius: layout.machineRadius - 12,
                           margin: layout.machineCoreMargin,
@@ -1407,6 +1484,7 @@ export default function App() {
                             key={index}
                             style={[
                               styles.reelFrame,
+                              legacyVisualMode && styles.reelFrameLegacy,
                               {
                                 borderRadius: layout.reelWidth * 0.12,
                                 height: layout.reelHeight,
@@ -1423,17 +1501,19 @@ export default function App() {
                               spinDelay={index * REEL_SPIN_DELAY}
                               spinToken={spinToken}
                               symbol={symbol}
+                              legacyVisualMode={legacyVisualMode}
                             />
                           </View>
                         ))}
                       </View>
-                    </LinearGradient>
-                  </LinearGradient>
+                    </BrandSurface>
+                  </BrandSurface>
                 </View>
 
                 <LeverButton
                   compact={layout.compact}
                   disabled={!isSpinPrimed || isMachineBusy}
+                  legacyVisualMode={legacyVisualMode}
                   onPress={() => {
                     void handleSpin();
                   }}
@@ -1453,6 +1533,7 @@ export default function App() {
 
       <ResultModal
         isOpen={resultModal.isOpen}
+        legacyVisualMode={legacyVisualMode}
         message={resultModal.message}
         onClose={closeModal}
         title={resultModal.variant === 'win' ? 'Ganaste' : 'Perdiste'}
@@ -1575,6 +1656,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
+  machineDepthPlateLegacy: {
+    backgroundColor: '#17468d',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
   machineShell: {
     paddingVertical: 24,
     paddingHorizontal: 22,
@@ -1587,6 +1675,14 @@ const styles = StyleSheet.create({
     shadowRadius: 30,
     shadowOffset: { width: 0, height: 22 },
     elevation: 18,
+  },
+  machineShellLegacy: {
+    backgroundColor: '#2466c1',
+    borderColor: '#0d3b7d',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   machineGlossTop: {
     position: 'absolute',
@@ -1628,9 +1724,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
   },
+  arcadeBulbLegacy: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#aac8ef',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
   machineCore: {
     padding: 12,
     overflow: 'hidden',
+  },
+  machineCoreLegacy: {
+    backgroundColor: '#1b4e9b',
   },
   reelsRow: {
     flexDirection: 'row',
@@ -1645,6 +1752,14 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
+  },
+  reelFrameLegacy: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: '#c7dbf6',
   },
   leverWrap: {
     position: 'absolute',
@@ -1686,6 +1801,12 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
   },
+  leverMountLegacy: {
+    backgroundColor: '#0e3568',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
   leverPivot: {
     position: 'absolute',
     top: 62,
@@ -1702,6 +1823,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#9eb5d0',
   },
+  leverRodLegacy: {
+    backgroundColor: '#d6e2ef',
+  },
   leverSocket: {
     position: 'absolute',
     top: 130,
@@ -1714,6 +1838,15 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 10,
+  },
+  leverSocketLegacy: {
+    backgroundColor: '#9db3c8',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: '#5a6f8a',
   },
   leverKnob: {
     position: 'absolute',
@@ -1728,10 +1861,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
+  leverKnobLegacy: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: '#0a3978',
+  },
   leverKnobCore: {
     width: '100%',
     height: '100%',
     borderRadius: 999,
+  },
+  leverKnobCoreLegacy: {
+    backgroundColor: '#4f9cff',
   },
   leverKnobHighlight: {
     position: 'absolute',
@@ -1742,6 +1886,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.38)',
     transform: [{ rotate: '-18deg' }],
+  },
+  leverKnobHighlightLegacy: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   footerCopy: {
     alignItems: 'center',
@@ -1765,6 +1912,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
+  loadingScreenLegacy: {
+    backgroundColor: BRAND_COLORS.pageMid,
+  },
   loadingCard: {
     width: '100%',
     maxWidth: 340,
@@ -1779,6 +1929,15 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 14 },
     elevation: 8,
+  },
+  loadingCardLegacy: {
+    backgroundColor: BRAND_COLORS.surface,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: '#c7dbf6',
   },
   loadingLogo: {
     width: 92,
@@ -1798,6 +1957,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 20,
   },
+  retryButtonLegacy: {
+    backgroundColor: BRAND_COLORS.primary,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.primaryStrong,
+  },
   retryButtonText: {
     fontFamily: 'LeagueSpartan_700Bold',
     fontSize: 20,
@@ -1816,5 +1980,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     color: '#47668f',
+  },
+  pageBackdropLegacy: {
+    backgroundColor: BRAND_COLORS.pageMid,
   },
 });

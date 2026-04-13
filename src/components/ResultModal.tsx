@@ -3,13 +3,21 @@ import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-nati
 
 type ResultModalProps = {
   isOpen: boolean;
+  legacyVisualMode?: boolean;
   message: string;
   onClose: () => void;
   title: string;
   variant: 'win' | 'lose';
 };
 
-export function ResultModal({ isOpen, message, onClose, title, variant }: ResultModalProps) {
+export function ResultModal({
+  isOpen,
+  legacyVisualMode = false,
+  message,
+  onClose,
+  title,
+  variant,
+}: ResultModalProps) {
   if (!isOpen) {
     return null;
   }
@@ -19,7 +27,7 @@ export function ResultModal({ isOpen, message, onClose, title, variant }: Result
       <Animated.View
         entering={SlideInDown.springify().damping(18)}
         exiting={SlideOutDown.duration(180)}
-        style={styles.cardWrap}
+        style={[styles.cardWrap, legacyVisualMode && styles.cardWrapLegacy]}
       >
         <View style={[styles.cardAccent, variant === 'win' ? styles.cardAccentWin : styles.cardAccentLose]} />
         <View style={styles.card}>
@@ -60,6 +68,14 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 16 },
     elevation: 18,
+  },
+  cardWrapLegacy: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: '#bfd6f6',
   },
   cardAccent: {
     height: 10,

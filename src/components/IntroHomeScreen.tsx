@@ -1,12 +1,13 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { BrandSurface } from './BrandSurface';
 import { HOME_MACHINE_PREVIEW, MED_LOGO } from '../data/slotSymbols';
 import { BRAND_COLORS, BRAND_GRADIENTS } from '../theme/brand';
 
 type IntroHomeScreenProps = {
   compact: boolean;
   isAppBlocked?: boolean;
+  legacyVisualMode?: boolean;
   lockedMessage?: string;
   logoSize: number;
   panelWidth: number;
@@ -18,6 +19,7 @@ type IntroHomeScreenProps = {
 export function IntroHomeScreen({
   compact,
   isAppBlocked = false,
+  legacyVisualMode = false,
   lockedMessage = 'Acercate mas tarde para participar.',
   logoSize,
   panelWidth,
@@ -32,9 +34,13 @@ export function IntroHomeScreen({
 
   return (
     <View style={styles.stage}>
-      <View style={[styles.cardShadow, { maxWidth: panelWidth }]} />
+      {!legacyVisualMode ? <View style={[styles.cardShadow, { maxWidth: panelWidth }]} /> : null}
 
-      <LinearGradient colors={BRAND_GRADIENTS.card} style={[styles.card, { maxWidth: panelWidth }]}>
+      <BrandSurface
+        colors={BRAND_GRADIENTS.card}
+        enabled={!legacyVisualMode}
+        style={[styles.card, legacyVisualMode && styles.cardLegacy, { maxWidth: panelWidth }]}
+      >
         <Pressable
           accessibilityRole="button"
           onPress={onLogoPress}
@@ -92,9 +98,17 @@ export function IntroHomeScreen({
               pressed && styles.buttonPressed,
             ]}
           >
-            <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={[styles.button, compact && styles.buttonCompact]}>
+            <BrandSurface
+              colors={BRAND_GRADIENTS.primaryButton}
+              enabled={!legacyVisualMode}
+              style={[
+                styles.button,
+                compact && styles.buttonCompact,
+                legacyVisualMode && styles.buttonLegacy,
+              ]}
+            >
               <Text style={styles.buttonText}>Comenzar</Text>
-            </LinearGradient>
+            </BrandSurface>
           </Pressable>
         ) : (
           <View style={[styles.lockedMessageWrap, compact && styles.lockedMessageWrapCompact]}>
@@ -113,7 +127,7 @@ export function IntroHomeScreen({
             },
           ]}
         />
-      </LinearGradient>
+      </BrandSurface>
     </View>
   );
 }
@@ -147,6 +161,10 @@ const styles = StyleSheet.create({
     borderColor: BRAND_COLORS.stroke,
     overflow: 'hidden',
   },
+  cardLegacy: {
+    backgroundColor: BRAND_COLORS.surface,
+    borderColor: '#c4d9f6',
+  },
   logo: {
     marginBottom: 18,
   },
@@ -179,6 +197,15 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 12 },
     elevation: 10,
+  },
+  buttonLegacy: {
+    backgroundColor: BRAND_COLORS.primary,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.primaryStrong,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   buttonPressableCompact: {
     width: '100%',

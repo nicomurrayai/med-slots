@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Image, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
@@ -11,11 +10,13 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { BrandSurface } from './BrandSurface';
 import { SLOT_SYMBOLS } from '../data/slotSymbols';
 import { SlotSymbol } from '../types/slot';
 
 type SlotReelProps = {
   duration: number;
+  legacyVisualMode?: boolean;
   onSpinComplete: () => void;
   pendingSymbol: SlotSymbol;
   reelHeight: number;
@@ -41,8 +42,7 @@ function getStableStripIndex(symbolId: string) {
 }
 
 function getLandingStripIndex(currentIndex: number, targetSymbolId: string) {
-  const minimumIndex =
-    currentIndex + (SLOT_SYMBOLS.length * MINIMUM_FULL_LOOPS) + EXTRA_SPIN_ROWS;
+  const minimumIndex = currentIndex + (SLOT_SYMBOLS.length * MINIMUM_FULL_LOOPS) + EXTRA_SPIN_ROWS;
 
   for (let index = minimumIndex; index < REEL_STRIP.length; index += 1) {
     if (REEL_STRIP[index]?.id === targetSymbolId) {
@@ -55,6 +55,7 @@ function getLandingStripIndex(currentIndex: number, targetSymbolId: string) {
 
 export function SlotReel({
   duration,
+  legacyVisualMode = false,
   onSpinComplete,
   pendingSymbol,
   reelHeight,
@@ -124,6 +125,7 @@ export function SlotReel({
     <View
       style={[
         styles.shell,
+        legacyVisualMode && styles.shellLegacy,
         {
           borderRadius: reelWidth * 0.12,
           height: reelHeight,
@@ -147,12 +149,14 @@ export function SlotReel({
           </View>
         ))}
       </Animated.View>
-      <LinearGradient
-        colors={['rgba(8, 28, 60, 0.35)', 'transparent', 'transparent', 'rgba(8, 28, 60, 0.35)']}
-        locations={[0, 0.18, 0.82, 1]}
-        pointerEvents="none"
-        style={StyleSheet.absoluteFillObject}
-      />
+      {!legacyVisualMode ? (
+        <BrandSurface
+          colors={['rgba(8, 28, 60, 0.35)', 'transparent', 'transparent', 'rgba(8, 28, 60, 0.35)']}
+          locations={[0, 0.18, 0.82, 1]}
+          pointerEvents="none"
+          style={StyleSheet.absoluteFillObject}
+        />
+      ) : null}
     </View>
   );
 }
@@ -161,6 +165,9 @@ const styles = StyleSheet.create({
   shell: {
     overflow: 'hidden',
     backgroundColor: 'transparent',
+  },
+  shellLegacy: {
+    backgroundColor: '#dfeafe',
   },
   symbolCell: {
     alignItems: 'center',

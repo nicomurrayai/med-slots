@@ -1,6 +1,6 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { BrandSurface } from './BrandSurface';
 import { BRAND_COLORS, BRAND_GRADIENTS } from '../theme/brand';
 
 type EmailCaptureScreenProps = {
@@ -8,6 +8,7 @@ type EmailCaptureScreenProps = {
   disabled?: boolean;
   email: string;
   errorMessage: string;
+  legacyVisualMode?: boolean;
   panelWidth: number;
   onBack: () => void;
   onChangeEmail: (value: string) => void;
@@ -20,6 +21,7 @@ export function EmailCaptureScreen({
   disabled = false,
   email,
   errorMessage,
+  legacyVisualMode = false,
   panelWidth,
   onBack,
   onChangeEmail,
@@ -28,12 +30,23 @@ export function EmailCaptureScreen({
 }: EmailCaptureScreenProps) {
   return (
     <View style={styles.stage}>
-      <View style={[styles.cardShadow, { maxWidth: panelWidth }]} />
+      {!legacyVisualMode ? <View style={[styles.cardShadow, { maxWidth: panelWidth }]} /> : null}
 
-      <LinearGradient colors={BRAND_GRADIENTS.card} style={[styles.card, { maxWidth: panelWidth }]}>
-        <Text style={styles.title}>Ingresá tu mail</Text>
+      <BrandSurface
+        colors={BRAND_GRADIENTS.card}
+        enabled={!legacyVisualMode}
+        style={[styles.card, legacyVisualMode && styles.cardLegacy, { maxWidth: panelWidth }]}
+      >
+        <Text style={styles.title}>Ingresa tu mail</Text>
 
-        <View style={[styles.inputShell, !!errorMessage && styles.inputShellError]}>
+        <View
+          style={[
+            styles.inputShell,
+            legacyVisualMode && styles.inputShellLegacy,
+            !!errorMessage && styles.inputShellError,
+            !!errorMessage && legacyVisualMode && styles.inputShellErrorLegacy,
+          ]}
+        >
           <TextInput
             accessibilityLabel="Correo electronico"
             autoCapitalize="none"
@@ -65,15 +78,23 @@ export function EmailCaptureScreen({
             disabled && styles.buttonDisabled,
           ]}
         >
-          <LinearGradient colors={BRAND_GRADIENTS.primaryButton} style={styles.button}>
+          <BrandSurface
+            colors={BRAND_GRADIENTS.primaryButton}
+            enabled={!legacyVisualMode}
+            style={[styles.button, legacyVisualMode && styles.buttonLegacy]}
+          >
             <Text style={styles.buttonText}>{submitLabel}</Text>
-          </LinearGradient>
+          </BrandSurface>
         </Pressable>
 
-        <Pressable accessibilityRole="button" onPress={onBack} style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
+        >
           <Text style={styles.backText}>REGRESAR</Text>
         </Pressable>
-      </LinearGradient>
+      </BrandSurface>
     </View>
   );
 }
@@ -106,6 +127,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BRAND_COLORS.stroke,
   },
+  cardLegacy: {
+    backgroundColor: BRAND_COLORS.surface,
+    borderColor: '#c4d9f6',
+  },
   title: {
     fontFamily: 'LeagueSpartan_700Bold',
     fontSize: 24,
@@ -121,6 +146,10 @@ const styles = StyleSheet.create({
     borderColor: BRAND_COLORS.strokeStrong,
     backgroundColor: BRAND_COLORS.surfaceSoft,
   },
+  inputShellLegacy: {
+    backgroundColor: BRAND_COLORS.white,
+    borderColor: '#89b4ea',
+  },
   inputShellError: {
     borderColor: '#3f83e8',
     shadowColor: BRAND_COLORS.primary,
@@ -128,6 +157,12 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+  },
+  inputShellErrorLegacy: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   input: {
     width: '100%',
@@ -166,6 +201,15 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 12 },
     elevation: 10,
+  },
+  buttonLegacy: {
+    backgroundColor: BRAND_COLORS.primary,
+    borderWidth: 1,
+    borderColor: BRAND_COLORS.primaryStrong,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   buttonPressable: {
     width: '100%',
