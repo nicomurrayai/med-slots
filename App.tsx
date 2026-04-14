@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  InteractionManager,
   Platform,
   Pressable,
   ScrollView,
@@ -32,7 +33,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { AdminScreen } from './src/components/AdminScreen';
+import { AdminScreen, type AdminLeadsLoadState } from './src/components/AdminScreen';
 import { BrandSurface } from './src/components/BrandSurface';
 import { CelebrationConfetti } from './src/components/CelebrationConfetti';
 import { EmailCaptureScreen } from './src/components/EmailCaptureScreen';
@@ -420,7 +421,8 @@ export default function App() {
   const [confettiBurstKey, setConfettiBurstKey] = useState(0);
   const [resultModal, setResultModal] = useState<ResultModalState>(createDefaultResultModal);
   const [adminRecentLeads, setAdminRecentLeads] = useState<LeadEntry[]>([]);
-  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminDeferredReady, setAdminDeferredReady] = useState(false);
+  const [adminLeadsLoadState, setAdminLeadsLoadState] = useState<AdminLeadsLoadState>('idle');
   const [adminNotice, setAdminNotice] = useState('');
   const [adminConfigNotice, setAdminConfigNotice] = useState('Se aplica desde la siguiente jugada.');
   const [adminConfigNoticeTone, setAdminConfigNoticeTone] = useState<AdminConfigNoticeTone>('neutral');
@@ -441,9 +443,13 @@ export default function App() {
   const completedReelsRef = useRef(0);
   const secretLogoTapCountRef = useRef(0);
   const lastSecretLogoTapAtRef = useRef(0);
+  const currentStepRef = useRef<AppStep>('home');
   const slotConfigRef = useRef(slotConfig);
   const configSaveLockRef = useRef(false);
   const spinLockRef = useRef(false);
+  const adminHydrationTokenRef = useRef(0);
+  const adminSnapshotRequestRef = useRef(0);
+  const adminDeferredTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
   const arcadePulse = useSharedValue(ARCADE_IDLE_GLOW);
 
   const [leagueLoaded, leagueError] = useLeagueSpartan({
@@ -566,6 +572,17 @@ export default function App() {
   }, [arcadePulse, status]);
 
   useEffect(() => {
+    currentStepRef.current = currentStep;
+
+    if (currentStep !== 'admin') {
+      adminDeferredTaskRef.current?.cancel();
+      adminDeferredTaskRef.current = null;
+      adminHydrationTokenRef.current += 1;
+      adminSnapshotRequestRef.current += 1;
+      setAdminDeferredReady(false);
+      setAdminLeadsLoadState('idle');
+    }
+
     if (currentStep === 'home') {
       return;
     }
@@ -573,6 +590,16 @@ export default function App() {
     secretLogoTapCountRef.current = 0;
     lastSecretLogoTapAtRef.current = 0;
   }, [currentStep]);
+
+  useEffect(
+    () => () => {
+      adminDeferredTaskRef.current?.cancel();
+      adminDeferredTaskRef.current = null;
+      adminHydrationTokenRef.current += 1;
+      adminSnapshotRequestRef.current += 1;
+    },
+    [],
+  );
 
   useEffect(() => {
     setAdminAppBlockNotice(
@@ -695,21 +722,47 @@ export default function App() {
     setResultModal(createDefaultResultModal());
   };
 
-  const refreshAdminSnapshot = async () => {
-    setAdminLoading(true);
+  const refreshAdminSnapshot = async (sessionToken: number, keepExistingSnapshot: boolean) => {
+    const requestToken = adminSnapshotRequestRef.current + 1;
+    adminSnapshotRequestRef.current = requestToken;
+    setAdminLeadsLoadState(keepExistingSnapshot ? 'refreshing' : 'loading');
 
     try {
       const recentLeads = await getRecentLeads(RECENT_LEADS_LIMIT);
+
+      if (
+        currentStepRef.current !== 'admin' ||
+        adminHydrationTokenRef.current !== sessionToken ||
+        adminSnapshotRequestRef.current !== requestToken
+      ) {
+        return;
+      }
+
       setAdminRecentLeads(recentLeads);
+      setAdminLeadsLoadState('idle');
     } catch {
+      if (
+        currentStepRef.current !== 'admin' ||
+        adminHydrationTokenRef.current !== sessionToken ||
+        adminSnapshotRequestRef.current !== requestToken
+      ) {
+        return;
+      }
+
       setAdminNotice('No pudimos leer los datos guardados en este telefono.');
-    } finally {
-      setAdminLoading(false);
+      setAdminLeadsLoadState('error');
     }
   };
 
-  const openAdminScreen = async () => {
+  const openAdminScreen = () => {
     const prizeQuotaState = getPrizeQuotaNoticeState(slotConfigRef.current);
+    const hasCachedSnapshot = adminRecentLeads.length > 0;
+    const sessionToken = adminHydrationTokenRef.current + 1;
+
+    adminDeferredTaskRef.current?.cancel();
+    adminDeferredTaskRef.current = null;
+    adminHydrationTokenRef.current = sessionToken;
+    adminSnapshotRequestRef.current += 1;
 
     setAdminNotice('');
     setAdminConfigNotice('Se aplica desde la siguiente jugada.');
@@ -721,8 +774,20 @@ export default function App() {
         ? 'La app esta bloqueada en este dispositivo.'
         : 'La app esta disponible para participar.',
     );
+    setAdminDeferredReady(false);
+    setAdminLeadsLoadState('idle');
     setCurrentStep('admin');
-    await refreshAdminSnapshot();
+
+    adminDeferredTaskRef.current = InteractionManager.runAfterInteractions(() => {
+      adminDeferredTaskRef.current = null;
+
+      if (currentStepRef.current !== 'admin' || adminHydrationTokenRef.current !== sessionToken) {
+        return;
+      }
+
+      setAdminDeferredReady(true);
+      void refreshAdminSnapshot(sessionToken, hasCachedSnapshot);
+    });
   };
 
   const handleOpenLeadCapture = () => {
@@ -1090,7 +1155,9 @@ export default function App() {
 
     try {
       await clearLeads();
+      adminSnapshotRequestRef.current += 1;
       setAdminRecentLeads([]);
+      setAdminLeadsLoadState('idle');
       setAdminNotice('Todos los mails fueron borrados de este dispositivo.');
     } catch {
       setAdminNotice('No pudimos borrar los mails guardados en este dispositivo.');
@@ -1311,15 +1378,16 @@ export default function App() {
             awardedPrizeCounts={slotConfig.awardedPrizeCounts}
             compact={layout.compact}
             currentEventDay={slotConfig.currentEventDay}
+            deferredReady={adminDeferredReady}
             dailyPrizeLimits={slotConfig.dailyPrizeLimits}
             isClearingLeads={isClearingLeads}
             isExporting={isExportingLeads}
-            isLoading={adminLoading}
             isSavingAppBlock={isSavingAppBlock}
             isSavingPrizeQuota={isSavingPrizeQuota}
             isSavingProbability={isSavingSlotConfig}
             isResettingPrizes={isResettingPrizes}
             legacyVisualMode={legacyVisualMode}
+            leadsLoadState={adminLeadsLoadState}
             lockNoticeMessage={adminAppBlockNotice}
             noticeMessage={adminNotice}
             onAwardedCountAdjust={handleAwardedPrizeCountAdjust}
@@ -1338,6 +1406,7 @@ export default function App() {
             probabilityNoticeMessage={adminConfigNotice}
             probabilityNoticeTone={adminConfigNoticeTone}
             recentLeads={adminRecentLeads}
+            reducedEffects={legacyVisualMode}
             winProbabilityPercent={slotConfig.winProbabilityPercent}
           />
         ) : null}

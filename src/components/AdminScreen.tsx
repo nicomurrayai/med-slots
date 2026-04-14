@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { BrandSurface } from './BrandSurface';
@@ -8,19 +8,22 @@ import { EventDay, PrizeDayValues, PrizeQuotaSummary } from '../types/slot';
 import { BRAND_COLORS, BRAND_GRADIENTS } from '../theme/brand';
 import { formatLeadTimestamp } from '../utils/leads';
 
+export type AdminLeadsLoadState = 'idle' | 'loading' | 'refreshing' | 'error';
+
 type AdminScreenProps = {
   appBlocked: boolean;
   awardedPrizeCounts: PrizeDayValues;
   compact: boolean;
   currentEventDay: EventDay;
+  deferredReady: boolean;
   dailyPrizeLimits: PrizeDayValues;
   isClearingLeads: boolean;
   isExporting: boolean;
-  isLoading: boolean;
   isResettingPrizes: boolean;
   isSavingAppBlock: boolean;
   isSavingPrizeQuota: boolean;
   isSavingProbability: boolean;
+  leadsLoadState: AdminLeadsLoadState;
   legacyVisualMode?: boolean;
   lockNoticeMessage: string;
   noticeMessage: string;
@@ -40,18 +43,26 @@ type AdminScreenProps = {
   probabilityNoticeMessage: string;
   probabilityNoticeTone: 'neutral' | 'success' | 'error';
   recentLeads: LeadEntry[];
+  reducedEffects?: boolean;
   winProbabilityPercent: number;
 };
 
 type SectionCardProps = {
-  children: React.ReactNode;
+  children: ReactNode;
   legacyVisualMode?: boolean;
+  reducedEffects?: boolean;
   title: string;
 };
 
-function SectionCard({ children, legacyVisualMode = false, title }: SectionCardProps) {
+function SectionCard({ children, legacyVisualMode = false, reducedEffects = false, title }: SectionCardProps) {
   return (
-    <View style={[styles.sectionCard, legacyVisualMode && styles.sectionCardLegacy]}>
+    <View
+      style={[
+        styles.sectionCard,
+        legacyVisualMode && styles.sectionCardLegacy,
+        reducedEffects && styles.sectionCardReduced,
+      ]}
+    >
       <Text style={styles.sectionTitle}>{title}</Text>
       {children}
     </View>
@@ -69,6 +80,7 @@ function ProbabilityControlSection({
   noticeMessage,
   noticeTone,
   onComplete,
+  reducedEffects,
   winProbabilityPercent,
 }: {
   compact: boolean;
@@ -77,6 +89,7 @@ function ProbabilityControlSection({
   noticeMessage: string;
   noticeTone: 'neutral' | 'success' | 'error';
   onComplete: (value: number) => void;
+  reducedEffects: boolean;
   winProbabilityPercent: number;
 }) {
   const [draftValue, setDraftValue] = useState(winProbabilityPercent);
@@ -129,16 +142,28 @@ function ProbabilityControlSection({
   const displayNoticeTone = isDirty ? 'neutral' : noticeTone;
 
   return (
-    <SectionCard legacyVisualMode={legacyVisualMode} title="Probabilidad">
+    <SectionCard legacyVisualMode={legacyVisualMode} reducedEffects={reducedEffects} title="Probabilidad">
       <Text style={styles.probabilityCopy}>Define el % de premio que la maquina intentara dar.</Text>
 
       <View style={styles.probabilityControlsColumn}>
-        <View style={[styles.probabilityMeter, styles.probabilityMeterMain]}>
+        <View
+          style={[
+            styles.probabilityMeter,
+            styles.probabilityMeterMain,
+            reducedEffects && styles.probabilityMeterReduced,
+          ]}
+        >
           <Text style={styles.probabilityValue}>{draftValue}%</Text>
           <Text style={styles.probabilityHint}>Actual</Text>
         </View>
 
-        <View style={[styles.probabilityMeter, styles.probabilityInputCard]}>
+        <View
+          style={[
+            styles.probabilityMeter,
+            styles.probabilityInputCard,
+            reducedEffects && styles.probabilityMeterReduced,
+          ]}
+        >
           <Text style={styles.probabilityInputLabel}>Nuevo</Text>
           <View style={styles.probabilityInputWrap}>
             <TextInput
@@ -188,6 +213,7 @@ function AppBlockSection({
   legacyVisualMode,
   noticeMessage,
   onChange,
+  reducedEffects,
 }: {
   compact: boolean;
   appBlocked: boolean;
@@ -195,9 +221,10 @@ function AppBlockSection({
   legacyVisualMode: boolean;
   noticeMessage: string;
   onChange: (value: boolean) => void;
+  reducedEffects: boolean;
 }) {
   return (
-    <SectionCard legacyVisualMode={legacyVisualMode} title="Acceso">
+    <SectionCard legacyVisualMode={legacyVisualMode} reducedEffects={reducedEffects} title="Acceso">
       <View style={styles.toggleColumn}>
         <View style={styles.toggleCopy}>
           <Text style={styles.toggleTitle}>App bloqueada</Text>
@@ -220,34 +247,53 @@ function AppBlockSection({
 
 function RecentLeadsSection({
   compact,
-  isLoading,
+  leadsLoadState,
   legacyVisualMode,
   recentLeads,
+  reducedEffects,
 }: {
   compact: boolean;
-  isLoading: boolean;
+  leadsLoadState: AdminLeadsLoadState;
   legacyVisualMode: boolean;
   recentLeads: LeadEntry[];
+  reducedEffects: boolean;
 }) {
+  const isInitialLoading = leadsLoadState === 'loading';
+  const isRefreshing = leadsLoadState === 'refreshing';
+
   return (
-    <SectionCard legacyVisualMode={legacyVisualMode} title="Registros">
-      {isLoading ? (
+    <SectionCard legacyVisualMode={legacyVisualMode} reducedEffects={reducedEffects} title="Registros">
+      {isInitialLoading ? (
         <View style={styles.loadingState}>
           <ActivityIndicator color={BRAND_COLORS.primary} size="small" />
           <Text style={styles.loadingText}>Cargando...</Text>
         </View>
       ) : null}
 
-      {!isLoading && recentLeads.length === 0 ? (
-        <View style={styles.emptyState}>
+      {isRefreshing ? (
+        <View style={styles.loadingState}>
+          <ActivityIndicator color={BRAND_COLORS.primary} size="small" />
+          <Text style={styles.loadingText}>Actualizando...</Text>
+        </View>
+      ) : null}
+
+      {!isInitialLoading && recentLeads.length === 0 ? (
+        <View style={[styles.emptyState, reducedEffects && styles.emptyStateReduced]}>
           <Text style={styles.emptyTitle}>Sin registros.</Text>
         </View>
       ) : null}
 
-      {!isLoading ? (
+      {!isInitialLoading && recentLeads.length > 0 ? (
         <View style={styles.leadsList}>
           {recentLeads.map((lead) => (
-            <View key={lead.id} style={[styles.leadRow, compact && styles.leadRowCompact]}>
+            <View
+              key={lead.id}
+              style={[
+                styles.leadRow,
+                compact && styles.leadRowCompact,
+                reducedEffects && styles.leadRowReduced,
+              ]}
+            >
               <View style={styles.leadRowHeader}>
                 <Text numberOfLines={1} style={styles.leadEmail}>
                   {lead.email}
@@ -272,6 +318,7 @@ function AdminActionsSection({
   onClearLeads,
   onExport,
   onResetPrizes,
+  reducedEffects,
 }: {
   isClearingLeads: boolean;
   isExporting: boolean;
@@ -281,11 +328,12 @@ function AdminActionsSection({
   onClearLeads: () => void;
   onExport: () => void;
   onResetPrizes: () => void;
+  reducedEffects: boolean;
 }) {
   const isBusy = isExporting || isClearingLeads || isResettingPrizes;
 
   return (
-    <SectionCard legacyVisualMode={legacyVisualMode} title="Datos">
+    <SectionCard legacyVisualMode={legacyVisualMode} reducedEffects={reducedEffects} title="Datos">
       <Pressable
         accessibilityRole="button"
         disabled={isBusy}
@@ -298,8 +346,12 @@ function AdminActionsSection({
       >
         <BrandSurface
           colors={BRAND_GRADIENTS.primaryButton}
-          enabled={!legacyVisualMode}
-          style={[styles.actionButton, legacyVisualMode && styles.actionButtonLegacy]}
+          enabled={!(legacyVisualMode || reducedEffects)}
+          style={[
+            styles.actionButton,
+            (legacyVisualMode || reducedEffects) && styles.actionButtonLegacy,
+            reducedEffects && styles.actionButtonReduced,
+          ]}
         >
           <Text style={styles.actionButtonText}>{isExporting ? 'EXPORTANDO...' : 'EXPORTAR CSV'}</Text>
         </BrandSurface>
@@ -315,7 +367,7 @@ function AdminActionsSection({
           isBusy && styles.actionButtonDisabled,
         ]}
       >
-        <View style={styles.secondaryActionButton}>
+        <View style={[styles.secondaryActionButton, reducedEffects && styles.secondaryActionButtonReduced]}>
           <Text style={styles.secondaryActionText}>{isClearingLeads ? 'BORRANDO...' : 'RESETEAR MAILS'}</Text>
         </View>
       </Pressable>
@@ -330,7 +382,7 @@ function AdminActionsSection({
           isBusy && styles.actionButtonDisabled,
         ]}
       >
-        <View style={styles.secondaryActionButton}>
+        <View style={[styles.secondaryActionButton, reducedEffects && styles.secondaryActionButtonReduced]}>
           <Text style={styles.secondaryActionText}>
             {isResettingPrizes ? 'RESETEANDO...' : 'RESETEAR PREMIOS'}
           </Text>
@@ -347,14 +399,15 @@ export function AdminScreen({
   awardedPrizeCounts,
   compact,
   currentEventDay,
+  deferredReady,
   dailyPrizeLimits,
   isClearingLeads,
   isExporting,
-  isLoading,
   isResettingPrizes,
   isSavingAppBlock,
   isSavingPrizeQuota,
   isSavingProbability,
+  leadsLoadState,
   legacyVisualMode = false,
   lockNoticeMessage,
   noticeMessage,
@@ -374,78 +427,100 @@ export function AdminScreen({
   probabilityNoticeMessage,
   probabilityNoticeTone,
   recentLeads,
+  reducedEffects = false,
   winProbabilityPercent,
 }: AdminScreenProps) {
-  return (
-    <View style={styles.stage}>
-      {!legacyVisualMode ? <View style={[styles.cardShadow, { maxWidth: panelWidth }]} /> : null}
-
-      <BrandSurface
-        colors={BRAND_GRADIENTS.card}
-        enabled={!legacyVisualMode}
-        style={[styles.card, legacyVisualMode && styles.cardLegacy, { maxWidth: panelWidth }]}
-      >
-        <View style={styles.headerColumn}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.kicker}>PANEL OCULTO</Text>
-            <Text style={[styles.title, compact && styles.titleCompact]}>AJUSTES</Text>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={onBack}
-            style={({ pressed }) => [styles.backButton, pressed && styles.backPressed]}
-          >
-            <Text style={styles.backText}>VOLVER</Text>
-          </Pressable>
+  const useReducedEffects = reducedEffects || legacyVisualMode;
+  const cardBody = (
+    <>
+      <View style={[styles.headerColumn, useReducedEffects && styles.headerColumnReduced]}>
+        <View style={styles.headerCopy}>
+          <Text style={styles.kicker}>PANEL OCULTO</Text>
+          <Text style={[styles.title, compact && styles.titleCompact]}>AJUSTES</Text>
         </View>
 
-        <PrizeQuotaSection
-          awardedPrizeCounts={awardedPrizeCounts}
-          currentEventDay={currentEventDay}
-          dailyPrizeLimits={dailyPrizeLimits}
-          isSaving={isSavingPrizeQuota}
-          noticeMessage={prizeQuotaNoticeMessage}
-          noticeTone={prizeQuotaNoticeTone}
-          onAwardedCountAdjust={onAwardedCountAdjust}
-          onCurrentEventDayChange={onCurrentEventDayChange}
-          onDailyPrizeLimitComplete={onDailyPrizeLimitComplete}
-          prizeQuotaSummary={prizeQuotaSummary}
-        />
-        <ProbabilityControlSection
-          compact={compact}
-          isSaving={isSavingProbability}
-          legacyVisualMode={legacyVisualMode}
-          noticeMessage={probabilityNoticeMessage}
-          noticeTone={probabilityNoticeTone}
-          onComplete={onProbabilityComplete}
-          winProbabilityPercent={winProbabilityPercent}
-        />
-        <AppBlockSection
-          compact={compact}
-          appBlocked={appBlocked}
-          isSaving={isSavingAppBlock}
-          legacyVisualMode={legacyVisualMode}
-          noticeMessage={lockNoticeMessage}
-          onChange={onAppBlockChange}
-        />
-        <RecentLeadsSection
-          compact={compact}
-          isLoading={isLoading}
-          legacyVisualMode={legacyVisualMode}
-          recentLeads={recentLeads}
-        />
-        <AdminActionsSection
-          isClearingLeads={isClearingLeads}
-          isExporting={isExporting}
-          isResettingPrizes={isResettingPrizes}
-          legacyVisualMode={legacyVisualMode}
-          noticeMessage={noticeMessage}
-          onClearLeads={onClearLeads}
-          onExport={onExport}
-          onResetPrizes={onResetPrizes}
-        />
-      </BrandSurface>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [
+            styles.backButton,
+            useReducedEffects && styles.backButtonReduced,
+            pressed && styles.backPressed,
+          ]}
+        >
+          <Text style={styles.backText}>VOLVER</Text>
+        </Pressable>
+      </View>
+
+      <ProbabilityControlSection
+        compact={compact}
+        isSaving={isSavingProbability}
+        legacyVisualMode={legacyVisualMode}
+        noticeMessage={probabilityNoticeMessage}
+        noticeTone={probabilityNoticeTone}
+        onComplete={onProbabilityComplete}
+        reducedEffects={useReducedEffects}
+        winProbabilityPercent={winProbabilityPercent}
+      />
+      <AppBlockSection
+        compact={compact}
+        appBlocked={appBlocked}
+        isSaving={isSavingAppBlock}
+        legacyVisualMode={legacyVisualMode}
+        noticeMessage={lockNoticeMessage}
+        onChange={onAppBlockChange}
+        reducedEffects={useReducedEffects}
+      />
+
+      {deferredReady ? (
+        <>
+          <PrizeQuotaSection
+            awardedPrizeCounts={awardedPrizeCounts}
+            currentEventDay={currentEventDay}
+            dailyPrizeLimits={dailyPrizeLimits}
+            isSaving={isSavingPrizeQuota}
+            noticeMessage={prizeQuotaNoticeMessage}
+            noticeTone={prizeQuotaNoticeTone}
+            onAwardedCountAdjust={onAwardedCountAdjust}
+            onCurrentEventDayChange={onCurrentEventDayChange}
+            onDailyPrizeLimitComplete={onDailyPrizeLimitComplete}
+            prizeQuotaSummary={prizeQuotaSummary}
+            reducedEffects={useReducedEffects}
+          />
+          <RecentLeadsSection
+            compact={compact}
+            leadsLoadState={leadsLoadState}
+            legacyVisualMode={legacyVisualMode}
+            recentLeads={recentLeads}
+            reducedEffects={useReducedEffects}
+          />
+          <AdminActionsSection
+            isClearingLeads={isClearingLeads}
+            isExporting={isExporting}
+            isResettingPrizes={isResettingPrizes}
+            legacyVisualMode={legacyVisualMode}
+            noticeMessage={noticeMessage}
+            onClearLeads={onClearLeads}
+            onExport={onExport}
+            onResetPrizes={onResetPrizes}
+            reducedEffects={useReducedEffects}
+          />
+        </>
+      ) : null}
+    </>
+  );
+
+  return (
+    <View style={styles.stage}>
+      {!useReducedEffects ? <View style={[styles.cardShadow, { maxWidth: panelWidth }]} /> : null}
+
+      {useReducedEffects ? (
+        <View style={[styles.card, styles.cardLegacy, styles.cardReduced, { maxWidth: panelWidth }]}>{cardBody}</View>
+      ) : (
+        <BrandSurface colors={BRAND_GRADIENTS.card} style={[styles.card, { maxWidth: panelWidth }]}>
+          {cardBody}
+        </BrandSurface>
+      )}
     </View>
   );
 }
@@ -482,9 +557,20 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND_COLORS.surface,
     borderColor: '#c4d9f6',
   },
+  cardReduced: {
+    borderRadius: 28,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    gap: 10,
+    backgroundColor: '#f4f8fc',
+    borderColor: '#cfdded',
+  },
   headerColumn: {
     flexDirection: 'column',
     gap: 16,
+  },
+  headerColumnReduced: {
+    gap: 12,
   },
   headerCopy: {
     width: '100%',
@@ -521,6 +607,13 @@ const styles = StyleSheet.create({
     borderColor: BRAND_COLORS.strokeStrong,
     alignItems: 'center',
     gap: 6,
+  },
+  probabilityMeterReduced: {
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    backgroundColor: '#f7fbff',
+    borderColor: '#d5e1ed',
   },
   probabilityControlsColumn: {
     flexDirection: 'column',
@@ -616,6 +709,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: BRAND_COLORS.primarySoft,
   },
+  backButtonReduced: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#d8e6f6',
+  },
   backPressed: {
     opacity: 0.82,
   },
@@ -637,6 +735,14 @@ const styles = StyleSheet.create({
   sectionCardLegacy: {
     backgroundColor: BRAND_COLORS.surfaceSoft,
     borderColor: '#d3e4fb',
+  },
+  sectionCardReduced: {
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+    backgroundColor: '#eef4fa',
+    borderColor: '#d5e1ed',
   },
   sectionTitle: {
     fontFamily: 'LeagueSpartan_700Bold',
@@ -660,6 +766,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     backgroundColor: BRAND_COLORS.surfaceSoft,
   },
+  emptyStateReduced: {
+    backgroundColor: '#f7fbff',
+    borderColor: '#d5e1ed',
+    borderWidth: 1,
+  },
   emptyTitle: {
     fontFamily: 'DMSans_700Bold',
     fontSize: 15,
@@ -676,6 +787,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BRAND_COLORS.stroke,
     gap: 6,
+  },
+  leadRowReduced: {
+    borderRadius: 18,
+    backgroundColor: '#f7fbff',
+    borderColor: '#d5e1ed',
   },
   leadRowCompact: {
     paddingHorizontal: 14,
@@ -732,6 +848,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     elevation: 0,
   },
+  actionButtonReduced: {
+    minHeight: 60,
+    borderRadius: 18,
+  },
   secondaryActionPressable: {
     width: '100%',
   },
@@ -747,6 +867,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff2f2',
     borderWidth: 1,
     borderColor: '#eab7b7',
+  },
+  secondaryActionButtonReduced: {
+    minHeight: 54,
+    borderRadius: 18,
   },
   secondaryActionText: {
     fontFamily: 'LeagueSpartan_700Bold',

@@ -16,6 +16,7 @@ type PrizeQuotaSectionProps = {
   onCurrentEventDayChange: (day: EventDay) => void;
   onDailyPrizeLimitComplete: (day: EventDay, value: number) => void;
   prizeQuotaSummary: PrizeQuotaSummary;
+  reducedEffects?: boolean;
 };
 
 type DayInputValues = Record<EventDay, string>;
@@ -39,6 +40,7 @@ export function PrizeQuotaSection({
   onCurrentEventDayChange,
   onDailyPrizeLimitComplete,
   prizeQuotaSummary,
+  reducedEffects = false,
 }: PrizeQuotaSectionProps) {
   const [inputValues, setInputValues] = useState<DayInputValues>(() => buildDayInputValues(dailyPrizeLimits));
   const skipBlurCommitRef = useRef<Record<EventDay, boolean>>({
@@ -91,7 +93,7 @@ export function PrizeQuotaSection({
   ];
 
   return (
-    <View style={styles.sectionCard}>
+    <View style={[styles.sectionCard, reducedEffects && styles.sectionCardReduced]}>
       <Text style={styles.sectionTitle}>Cupo de premios</Text>
       <Text style={styles.sectionCopy}>
         Selecciona el dia activo, ajusta los cupos y corrige el conteo del dia actual si hace falta.
@@ -111,6 +113,7 @@ export function PrizeQuotaSection({
               }}
               style={({ pressed }) => [
                 styles.daySelectorButton,
+                reducedEffects && styles.daySelectorButtonReduced,
                 active && styles.daySelectorButtonActive,
                 pressed && !isSaving && styles.daySelectorButtonPressed,
                 isSaving && styles.daySelectorButtonDisabled,
@@ -132,6 +135,7 @@ export function PrizeQuotaSection({
       <View
         style={[
           styles.heroCard,
+          reducedEffects && styles.heroCardReduced,
           prizeQuotaSummary.isCurrentDayExhausted && styles.heroCardExhausted,
         ]}
       >
@@ -162,7 +166,7 @@ export function PrizeQuotaSection({
 
         <View style={styles.summaryList}>
           {summaryItems.map((item) => (
-            <View key={item.label} style={styles.summaryRow}>
+            <View key={item.label} style={[styles.summaryRow, reducedEffects && styles.summaryRowReduced]}>
               <Text style={styles.summaryLabel}>{item.label}</Text>
               <Text style={styles.summaryNumber}>{item.value}</Text>
             </View>
@@ -176,7 +180,15 @@ export function PrizeQuotaSection({
           const remainingCount = Math.max(dailyPrizeLimits[day] - awardedPrizeCounts[day], 0);
 
           return (
-            <View key={day} style={[styles.dayCard, isActiveDay && styles.dayCardActive]}>
+            <View
+              key={day}
+              style={[
+                styles.dayCard,
+                reducedEffects && styles.dayCardReduced,
+                isActiveDay && styles.dayCardActive,
+                isActiveDay && reducedEffects && styles.dayCardActiveReduced,
+              ]}
+            >
               <View style={styles.dayCardHeader}>
                 <Text style={styles.dayCardTitle}>{getEventDayLabel(day)}</Text>
                 {isActiveDay ? (
@@ -223,7 +235,7 @@ export function PrizeQuotaSection({
         })}
       </View>
 
-      <View style={styles.adjustmentCard}>
+      <View style={[styles.adjustmentCard, reducedEffects && styles.adjustmentCardReduced]}>
         <Text style={styles.adjustmentTitle}>Correccion manual</Text>
         <Text style={styles.adjustmentCopy}>
           Ajusta el conteo de {currentDayLabel} entre 0 y {prizeQuotaSummary.currentDayLimit} premios.
@@ -290,6 +302,14 @@ const styles = StyleSheet.create({
     borderColor: BRAND_COLORS.stroke,
     gap: 10,
   },
+  sectionCardReduced: {
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#eef4fa',
+    borderColor: '#d5e1ed',
+    gap: 8,
+  },
   sectionTitle: {
     fontFamily: 'LeagueSpartan_700Bold',
     fontSize: 19,
@@ -313,6 +333,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BRAND_COLORS.strokeStrong,
     backgroundColor: BRAND_COLORS.white,
+  },
+  daySelectorButtonReduced: {
+    borderColor: '#d5e1ed',
+    backgroundColor: '#f7fbff',
   },
   daySelectorContent: {
     flexDirection: 'row',
@@ -355,6 +379,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BRAND_COLORS.strokeStrong,
     gap: 10,
+  },
+  heroCardReduced: {
+    backgroundColor: '#f7fbff',
+    borderColor: '#d5e1ed',
   },
   heroCardExhausted: {
     backgroundColor: '#fff1f1',
@@ -413,6 +441,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BRAND_COLORS.stroke,
   },
+  summaryRowReduced: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d5e1ed',
+  },
   summaryNumber: {
     fontFamily: 'LeagueSpartan_700Bold',
     fontSize: 22,
@@ -438,6 +470,10 @@ const styles = StyleSheet.create({
     borderColor: BRAND_COLORS.stroke,
     gap: 8,
   },
+  dayCardReduced: {
+    backgroundColor: '#f7fbff',
+    borderColor: '#d5e1ed',
+  },
   dayCardActive: {
     borderColor: BRAND_COLORS.primary,
     shadowColor: BRAND_COLORS.shadowStrong,
@@ -445,6 +481,12 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
+  },
+  dayCardActiveReduced: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   dayCardHeader: {
     flexDirection: 'row',
@@ -517,6 +559,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BRAND_COLORS.strokeStrong,
     gap: 10,
+  },
+  adjustmentCardReduced: {
+    backgroundColor: '#f7fbff',
+    borderColor: '#d5e1ed',
   },
   adjustmentTitle: {
     fontFamily: 'LeagueSpartan_700Bold',
