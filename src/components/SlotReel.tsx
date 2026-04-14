@@ -115,7 +115,16 @@ export function SlotReel({
         },
       ),
     );
+
+    return () => cancelAnimation(offset);
   }, [duration, offset, onSpinComplete, pendingSymbol, reelHeight, spinDelay, spinToken]);
+
+  useEffect(
+    () => () => {
+      cancelAnimation(offset);
+    },
+    [offset],
+  );
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: offset.value }],

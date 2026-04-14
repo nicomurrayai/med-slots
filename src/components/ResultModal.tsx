@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 
 type ResultModalProps = {
+  disableTransitions?: boolean;
   isOpen: boolean;
   legacyVisualMode?: boolean;
   message: string;
@@ -11,6 +12,7 @@ type ResultModalProps = {
 };
 
 export function ResultModal({
+  disableTransitions = false,
   isOpen,
   legacyVisualMode = false,
   message,
@@ -22,6 +24,37 @@ export function ResultModal({
     return null;
   }
 
+  const cardContent = (
+    <>
+      <View style={[styles.cardAccent, variant === 'win' ? styles.cardAccentWin : styles.cardAccentLose]} />
+      <View style={styles.card}>
+        <Text style={styles.title}>{title}</Text>
+        {message ? <Text style={styles.body}>{message}</Text> : null}
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClose}
+          style={({ pressed }) => [
+            styles.button,
+            !message && styles.buttonWithTitleGap,
+            pressed && styles.buttonPressed,
+          ]}
+        >
+          <Text style={styles.buttonText}>Volver al inicio</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+
+  const content = (
+    <View style={[styles.cardWrap, legacyVisualMode && styles.cardWrapLegacy]}>
+      {cardContent}
+    </View>
+  );
+
+  if (disableTransitions) {
+    return <View style={styles.overlay}>{content}</View>;
+  }
+
   return (
     <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(180)} style={styles.overlay}>
       <Animated.View
@@ -29,22 +62,7 @@ export function ResultModal({
         exiting={SlideOutDown.duration(180)}
         style={[styles.cardWrap, legacyVisualMode && styles.cardWrapLegacy]}
       >
-        <View style={[styles.cardAccent, variant === 'win' ? styles.cardAccentWin : styles.cardAccentLose]} />
-        <View style={styles.card}>
-          <Text style={styles.title}>{title}</Text>
-          {message ? <Text style={styles.body}>{message}</Text> : null}
-          <Pressable
-            accessibilityRole="button"
-            onPress={onClose}
-            style={({ pressed }) => [
-              styles.button,
-              !message && styles.buttonWithTitleGap,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <Text style={styles.buttonText}>Volver al inicio</Text>
-          </Pressable>
-        </View>
+        {cardContent}
       </Animated.View>
     </Animated.View>
   );

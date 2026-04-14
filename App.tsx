@@ -7,7 +7,7 @@ import {
 } from '@expo-google-fonts/league-spartan';
 import * as Sharing from 'expo-sharing';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -77,6 +77,7 @@ const BASE_REEL_DURATION = 3200;
 const REEL_DURATION_STEP = 520;
 const REEL_SPIN_DELAY = 360;
 const CONFETTI_VISIBLE_MS = 9700;
+const LEGACY_CONFETTI_VISIBLE_MS = 2800;
 const ARCADE_LIGHTS = Array.from({ length: 7 }, (_, index) => index);
 const ARCADE_PULSE_DURATION = 1280;
 const ARCADE_IDLE_GLOW = 0.2;
@@ -86,6 +87,8 @@ const SECRET_LOGO_TAP_TARGET = 5;
 const SECRET_LOGO_TAP_WINDOW_MS = 900;
 const RECENT_LEADS_LIMIT = 20;
 const SLOT_ENTRY_GUARD_MS = 450;
+const RETURN_HOME_DELAY_MS = 220;
+const RETURN_HOME_LEGACY_DELAY_MS = 32;
 
 type AppStep = 'home' | 'leadCapture' | 'slot' | 'admin';
 type AdminConfigNoticeTone = 'neutral' | 'success' | 'error';
@@ -190,7 +193,7 @@ function LeverButton({ compact, disabled, legacyVisualMode, onPress, spinToken }
 
   useEffect(() => {
     if (!spinToken) {
-      return;
+      return () => cancelAnimation(pullProgress);
     }
 
     pullProgress.value = 0;
@@ -212,6 +215,8 @@ function LeverButton({ compact, disabled, legacyVisualMode, onPress, spinToken }
         easing: Easing.out(Easing.quad),
       }),
     );
+
+    return () => cancelAnimation(pullProgress);
   }, [pullProgress, spinToken]);
 
   const leverPivotStyle = useAnimatedStyle(() => ({
@@ -438,6 +443,8 @@ export default function App() {
   const [isClearingLeads, setIsClearingLeads] = useState(false);
   const [isResettingPrizes, setIsResettingPrizes] = useState(false);
   const [isSpinPending, setIsSpinPending] = useState(false);
+  const [isReturningHome, setIsReturningHome] = useState(false);
+  const [flowResetToken, setFlowResetToken] = useState(0);
 
   const pendingResultRef = useRef<SpinResult | null>(null);
   const completedReelsRef = useRef(0);
@@ -450,6 +457,11 @@ export default function App() {
   const adminHydrationTokenRef = useRef(0);
   const adminSnapshotRequestRef = useRef(0);
   const adminDeferredTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
+  const confettiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slotEntryGuardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const returnHomeTaskRef = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(null);
+  const returnHomeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isReturningHomeRef = useRef(false);
   const arcadePulse = useSharedValue(ARCADE_IDLE_GLOW);
 
   const [leagueLoaded, leagueError] = useLeagueSpartan({
@@ -537,16 +549,27 @@ export default function App() {
   }, [storageRetryToken]);
 
   useEffect(() => {
+    if (confettiTimeoutRef.current) {
+      clearTimeout(confettiTimeoutRef.current);
+      confettiTimeoutRef.current = null;
+    }
+
     if (!hasTriggeredConfetti) {
       return;
     }
 
-    const timeout = setTimeout(() => {
+    confettiTimeoutRef.current = setTimeout(() => {
+      confettiTimeoutRef.current = null;
       setHasTriggeredConfetti(false);
-    }, CONFETTI_VISIBLE_MS);
+    }, legacyVisualMode ? LEGACY_CONFETTI_VISIBLE_MS : CONFETTI_VISIBLE_MS);
 
-    return () => clearTimeout(timeout);
-  }, [hasTriggeredConfetti]);
+    return () => {
+      if (confettiTimeoutRef.current) {
+        clearTimeout(confettiTimeoutRef.current);
+        confettiTimeoutRef.current = null;
+      }
+    };
+  }, [hasTriggeredConfetti, legacyVisualMode]);
 
   useEffect(() => {
     cancelAnimation(arcadePulse);
@@ -561,14 +584,16 @@ export default function App() {
         -1,
         false,
       );
-
-      return () => cancelAnimation(arcadePulse);
     }
 
-    arcadePulse.value = withTiming(ARCADE_IDLE_GLOW, {
-      duration: 240,
-      easing: Easing.out(Easing.quad),
-    });
+    if (status !== 'spinning') {
+      arcadePulse.value = withTiming(ARCADE_IDLE_GLOW, {
+        duration: 240,
+        easing: Easing.out(Easing.quad),
+      });
+    }
+
+    return () => cancelAnimation(arcadePulse);
   }, [arcadePulse, status]);
 
   useEffect(() => {
@@ -597,8 +622,25 @@ export default function App() {
       adminDeferredTaskRef.current = null;
       adminHydrationTokenRef.current += 1;
       adminSnapshotRequestRef.current += 1;
+      if (returnHomeTaskRef.current) {
+        returnHomeTaskRef.current.cancel();
+        returnHomeTaskRef.current = null;
+      }
+      if (returnHomeTimeoutRef.current) {
+        clearTimeout(returnHomeTimeoutRef.current);
+        returnHomeTimeoutRef.current = null;
+      }
+      if (confettiTimeoutRef.current) {
+        clearTimeout(confettiTimeoutRef.current);
+        confettiTimeoutRef.current = null;
+      }
+      if (slotEntryGuardTimeoutRef.current) {
+        clearTimeout(slotEntryGuardTimeoutRef.current);
+        slotEntryGuardTimeoutRef.current = null;
+      }
+      cancelAnimation(arcadePulse);
     },
-    [],
+    [arcadePulse],
   );
 
   useEffect(() => {
@@ -615,13 +657,47 @@ export default function App() {
     }
 
     if (currentStep === 'leadCapture' || currentStep === 'slot') {
+      if (returnHomeTaskRef.current) {
+        returnHomeTaskRef.current.cancel();
+        returnHomeTaskRef.current = null;
+      }
+      if (returnHomeTimeoutRef.current) {
+        clearTimeout(returnHomeTimeoutRef.current);
+        returnHomeTimeoutRef.current = null;
+      }
+      isReturningHomeRef.current = false;
+      setIsReturningHome(false);
+      if (confettiTimeoutRef.current) {
+        clearTimeout(confettiTimeoutRef.current);
+        confettiTimeoutRef.current = null;
+      }
+      if (slotEntryGuardTimeoutRef.current) {
+        clearTimeout(slotEntryGuardTimeoutRef.current);
+        slotEntryGuardTimeoutRef.current = null;
+      }
       setEmailError('');
-      resetSlotState();
+      pendingResultRef.current = null;
+      completedReelsRef.current = 0;
+      spinLockRef.current = false;
+      setCurrentReels(INITIAL_REELS);
+      setTargetReels(INITIAL_REELS);
+      setSpinToken(0);
+      setIsSpinPrimed(false);
+      setIsSpinPending(false);
+      setStatus('idle');
+      setHasTriggeredConfetti(false);
+      setResultModal(createDefaultResultModal());
+      setFlowResetToken((value) => value + 1);
       setCurrentStep('home');
     }
   }, [currentStep, slotConfig.appBlocked]);
 
   useEffect(() => {
+    if (slotEntryGuardTimeoutRef.current) {
+      clearTimeout(slotEntryGuardTimeoutRef.current);
+      slotEntryGuardTimeoutRef.current = null;
+    }
+
     if (currentStep !== 'slot') {
       setIsSpinPrimed(false);
       return;
@@ -629,12 +705,16 @@ export default function App() {
 
     setIsSpinPrimed(false);
 
-    const timer = setTimeout(() => {
+    slotEntryGuardTimeoutRef.current = setTimeout(() => {
+      slotEntryGuardTimeoutRef.current = null;
       setIsSpinPrimed(true);
     }, SLOT_ENTRY_GUARD_MS);
 
     return () => {
-      clearTimeout(timer);
+      if (slotEntryGuardTimeoutRef.current) {
+        clearTimeout(slotEntryGuardTimeoutRef.current);
+        slotEntryGuardTimeoutRef.current = null;
+      }
     };
   }, [currentStep]);
 
@@ -646,7 +726,7 @@ export default function App() {
     (dmLoaded || !!dmError);
 
   const prizeQuotaSummary = useMemo(() => getPrizeQuotaSummary(slotConfig), [slotConfig]);
-  const isMachineBusy = status === 'spinning' || isSpinPending;
+  const isMachineBusy = status === 'spinning' || isSpinPending || isReturningHome;
 
   const layout = useMemo(() => {
     const pageWidth = Math.min(width, 1280);
@@ -709,17 +789,87 @@ export default function App() {
     }
   };
 
-  const resetSlotState = () => {
+  const cancelReturnHomeTransition = () => {
+    if (returnHomeTaskRef.current) {
+      returnHomeTaskRef.current.cancel();
+      returnHomeTaskRef.current = null;
+    }
+
+    if (returnHomeTimeoutRef.current) {
+      clearTimeout(returnHomeTimeoutRef.current);
+      returnHomeTimeoutRef.current = null;
+    }
+
+    isReturningHomeRef.current = false;
+    setIsReturningHome(false);
+  };
+
+  const clearSlotTransientState = (options: { preserveModal?: boolean } = {}) => {
+    if (confettiTimeoutRef.current) {
+      clearTimeout(confettiTimeoutRef.current);
+      confettiTimeoutRef.current = null;
+    }
+
+    if (slotEntryGuardTimeoutRef.current) {
+      clearTimeout(slotEntryGuardTimeoutRef.current);
+      slotEntryGuardTimeoutRef.current = null;
+    }
+
     pendingResultRef.current = null;
     completedReelsRef.current = 0;
     spinLockRef.current = false;
-    setCurrentReels(INITIAL_REELS);
-    setTargetReels(INITIAL_REELS);
-    setSpinToken(0);
+    setIsSpinPrimed(false);
     setIsSpinPending(false);
     setStatus('idle');
     setHasTriggeredConfetti(false);
-    setResultModal(createDefaultResultModal());
+
+    if (!options.preserveModal) {
+      setResultModal(createDefaultResultModal());
+    }
+  };
+
+  const resetSlotState = () => {
+    clearSlotTransientState();
+    setCurrentReels(INITIAL_REELS);
+    setTargetReels(INITIAL_REELS);
+    setSpinToken(0);
+  };
+
+  const finalizeReturnHome = () => {
+    cancelReturnHomeTransition();
+    resetSlotState();
+    setFlowResetToken((value) => value + 1);
+    setCurrentStep('home');
+  };
+
+  const scheduleReturnHome = () => {
+    if (isReturningHomeRef.current) {
+      return;
+    }
+
+    cancelReturnHomeTransition();
+    isReturningHomeRef.current = true;
+    setIsReturningHome(true);
+    clearSlotTransientState({ preserveModal: true });
+    setResultModal((previous) => ({ ...previous, isOpen: false }));
+
+    returnHomeTaskRef.current = InteractionManager.runAfterInteractions(() => {
+      returnHomeTaskRef.current = null;
+
+      if (!isReturningHomeRef.current) {
+        return;
+      }
+
+      returnHomeTimeoutRef.current = setTimeout(() => {
+        returnHomeTimeoutRef.current = null;
+
+        if (!isReturningHomeRef.current) {
+          return;
+        }
+
+        finalizeReturnHome();
+      }, legacyVisualMode ? RETURN_HOME_LEGACY_DELAY_MS : RETURN_HOME_DELAY_MS);
+    });
   };
 
   const refreshAdminSnapshot = async (sessionToken: number, keepExistingSnapshot: boolean) => {
@@ -829,6 +979,7 @@ export default function App() {
       await saveLead(normalizedEmail);
       setCapturedEmail(normalizedEmail);
       setEmailError('');
+      cancelReturnHomeTransition();
       resetSlotState();
       setCurrentStep('slot');
     } catch {
@@ -841,12 +992,15 @@ export default function App() {
   const handleGoBackHome = () => {
     const prizeQuotaState = getPrizeQuotaNoticeState(slotConfigRef.current);
 
+    cancelReturnHomeTransition();
     setEmailError('');
     setAdminNotice('');
     setAdminConfigNotice('Se aplica desde la siguiente jugada.');
     setAdminConfigNoticeTone('neutral');
     setPrizeQuotaNotice(prizeQuotaState.message);
     setPrizeQuotaNoticeTone(prizeQuotaState.tone);
+    resetSlotState();
+    setFlowResetToken((value) => value + 1);
     setCurrentStep('home');
   };
 
@@ -1255,8 +1409,7 @@ export default function App() {
   };
 
   const closeModal = () => {
-    resetSlotState();
-    setCurrentStep('home');
+    scheduleReturnHome();
   };
 
   const statusCopy =
@@ -1412,7 +1565,7 @@ export default function App() {
         ) : null}
 
         {currentStep === 'slot' ? (
-          <>
+          <Fragment key={`slot-session-${flowResetToken}`}>
             <View style={[styles.hero, layout.compact && styles.heroCompact]}>
               <View style={[styles.heroIntro, { maxWidth: layout.headlineWidth }]}>
                 <Image
@@ -1594,14 +1747,21 @@ export default function App() {
             <View style={styles.footerCopy}>
               {statusCopy ? <Text style={styles.statusCopy}>{statusCopy}</Text> : null}
             </View>
-          </>
+          </Fragment>
         ) : null}
       </ScrollView>
 
-      <CelebrationConfetti active={hasTriggeredConfetti} burstKey={confettiBurstKey} />
+      <CelebrationConfetti
+        active={hasTriggeredConfetti}
+        burstKey={confettiBurstKey}
+        key={`confetti-${flowResetToken}`}
+        reducedEffects={legacyVisualMode}
+      />
 
       <ResultModal
+        disableTransitions={legacyVisualMode}
         isOpen={resultModal.isOpen}
+        key={`result-modal-${flowResetToken}`}
         legacyVisualMode={legacyVisualMode}
         message={resultModal.message}
         onClose={closeModal}

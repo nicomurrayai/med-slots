@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing,
+  cancelAnimation,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
@@ -14,6 +15,7 @@ import { BRAND_CONFETTI_COLORS } from '../theme/brand';
 type CelebrationConfettiProps = {
   active: boolean;
   burstKey: number;
+  reducedEffects?: boolean;
 };
 
 type ConfettiPieceProps = {
@@ -44,6 +46,7 @@ function ConfettiPiece({
   const progress = useSharedValue(0);
 
   useEffect(() => {
+    cancelAnimation(progress);
     progress.value = 0;
     progress.value = withDelay(
       delay,
@@ -52,6 +55,8 @@ function ConfettiPiece({
         easing: Easing.out(Easing.quad),
       }),
     );
+
+    return () => cancelAnimation(progress);
   }, [delay, duration, progress]);
 
   const animatedStyle = useAnimatedStyle(() => {
@@ -91,35 +96,46 @@ function ConfettiPiece({
 export const CelebrationConfetti = memo(function CelebrationConfetti({
   active,
   burstKey,
+  reducedEffects = false,
 }: CelebrationConfettiProps) {
   const { height, width } = useWindowDimensions();
 
   const pieces = useMemo(() => {
-    const waveCount = 3;
-    const piecesPerWave = 34;
+    const waveCount = reducedEffects ? 2 : 3;
+    const piecesPerWave = reducedEffects ? 14 : 34;
 
     return Array.from({ length: waveCount * piecesPerWave }).map((_, index) => {
       const wave = Math.floor(index / piecesPerWave);
       const localIndex = index % piecesPerWave;
       const spread = width / piecesPerWave;
       const centerOffset = ((localIndex % 5) - 2) * 7;
-      const travelStrength = 60 + (localIndex % 7) * 18 + wave * 16;
+      const travelStrength =
+        (reducedEffects ? 42 : 60) +
+        (localIndex % 7) * (reducedEffects ? 10 : 18) +
+        wave * (reducedEffects ? 10 : 16);
       const direction = localIndex % 2 === 0 ? 1 : -1;
 
       return {
         color: BRAND_CONFETTI_COLORS[index % BRAND_CONFETTI_COLORS.length],
-        delay: wave * 220 + (localIndex % 6) * 38,
-        duration: 2800 + wave * 340 + (localIndex % 8) * 48,
+        delay: wave * (reducedEffects ? 160 : 220) + (localIndex % 6) * (reducedEffects ? 26 : 38),
+        duration:
+          (reducedEffects ? 1600 : 2800) +
+          wave * (reducedEffects ? 180 : 340) +
+          (localIndex % 8) * (reducedEffects ? 28 : 48),
         id: `${burstKey}-${index}`,
         left: localIndex * spread + centerOffset,
-        rotationBoost: direction * (540 + (localIndex % 9) * 42 + wave * 30),
-        size: 8 + (localIndex % 6) * 1.4 + wave,
-        startTop: -60 - wave * 30 - (localIndex % 4) * 8,
+        rotationBoost:
+          direction *
+          ((reducedEffects ? 300 : 540) +
+            (localIndex % 9) * (reducedEffects ? 24 : 42) +
+            wave * (reducedEffects ? 18 : 30)),
+        size: (reducedEffects ? 6 : 8) + (localIndex % 6) * (reducedEffects ? 1 : 1.4) + wave,
+        startTop: -60 - wave * (reducedEffects ? 18 : 30) - (localIndex % 4) * 8,
         tilt: direction * (10 + (localIndex % 4) * 8),
         travel: direction * travelStrength,
       };
     });
-  }, [burstKey, width]);
+  }, [burstKey, reducedEffects, width]);
 
   if (!active) {
     return null;
